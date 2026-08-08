@@ -1,63 +1,63 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MTG Voice Card</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MTG Voice Card</title>
 
-    <style>
-        body {
-            margin: 0;
-            background: #111;
-            color: white;
-            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-        }
+<style>
+body{
+    margin:0;
+    background:#111;
+    color:white;
+    font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+}
 
-        button {
-            font-size: 24px;
-            padding: 20px 30px;
-            border-radius: 15px;
-            border: none;
-            background: white;
-            color: black;
-        }
+button{
+    font-size:24px;
+    padding:20px 30px;
+    border-radius:15px;
+    border:none;
+    background:white;
+    color:black;
+}
 
-        button:disabled {
-            opacity: 0.5;
-        }
+button:disabled{
+    opacity:.5;
+}
 
-        #result {
-            margin-top: 30px;
-            font-size: 22px;
-            max-width: 90%;
-        }
+#result{
+    margin-top:25px;
+    font-size:20px;
+    max-width:90%;
+    white-space:pre-line;
+}
 
-        #card {
-            display: none;
-            max-width: 90%;
-            max-height: 65vh;
-            margin-top: 25px;
-            border-radius: 12px;
-        }
-    </style>
+#card{
+    display:none;
+    max-width:90%;
+    max-height:65vh;
+    margin-top:20px;
+    border-radius:12px;
+}
+</style>
 </head>
 
 <body>
 
-    <button id="listenButton">🎤 Speak card name</button>
+<button id="listenButton">🎤 Speak card name</button>
 
-    <div id="result">
-        Tap the button and say a Magic card name.
-    </div>
+<div id="result">
+Tap the button and say a Magic card name.
+</div>
 
-    <img id="card" alt="Magic card">
-
+<img id="card" alt="Magic card">
 
 <script>
 
@@ -65,14 +65,12 @@ const button = document.getElementById("listenButton");
 const result = document.getElementById("result");
 const cardImage = document.getElementById("card");
 
+let lastHeardText = "";
+let cardNamesCache = null;
+
 const SpeechRecognition =
     window.SpeechRecognition ||
     window.webkitSpeechRecognition;
-
-
-/* =========================================================
-   SPEECH RECOGNITION
-   ========================================================= */
 
 if (!SpeechRecognition) {
 
@@ -86,8 +84,6 @@ if (!SpeechRecognition) {
     recognition.lang = "en-US";
     recognition.continuous = false;
     recognition.interimResults = false;
-
-    // Ask Safari for several interpretations
     recognition.maxAlternatives = 5;
 
     let timeout;
@@ -96,31 +92,29 @@ if (!SpeechRecognition) {
 
         clearTimeout(timeout);
 
-        result.textContent = "🎤 Listening...";
+        lastHeardText = "";
 
         cardImage.style.display = "none";
+
+        result.textContent =
+            "🎤 Listening...";
 
         button.disabled = true;
 
         try {
-
             recognition.start();
-
-        } catch (error) {
-
-            console.log(error);
-
+        }
+        catch(e){
+            console.log(e);
         }
 
-        // Safety timeout
         timeout = setTimeout(() => {
 
             recognition.stop();
 
-        }, 7000);
+        }, 3000);
 
     });
-
 
     recognition.onresult = async (event) => {
 
@@ -130,241 +124,141 @@ if (!SpeechRecognition) {
 
         const candidates = [];
 
-        for (
-            let i = 0;
-            i < event.results[0].length;
-            i++
-        ) {
+        for(let i=0;i<event.results[0].length;i++){
 
-            candidates.push(
-                event.results[0][i].transcript.trim()
-            );
+            const transcript =
+                event.results[0][i].transcript.trim();
 
+            candidates.push(transcript);
+
+            if(i===0){
+                lastHeardText = transcript;
+            }
         }
 
-        console.log(
-            "Speech alternatives:",
-            candidates
-        );
-
-        result.textContent = "Searching...";
+        result.textContent =
+            "Heard: " + lastHeardText +
+            "\nSearching...";
 
         await findBestCard(candidates);
 
     };
 
-
     recognition.onerror = (event) => {
-
-        clearTimeout(timeout);
 
         result.textContent =
             "Speech error: " + event.error;
 
         button.disabled = false;
-
     };
-
 
     recognition.onend = () => {
 
         clearTimeout(timeout);
 
         button.disabled = false;
-
     };
-
 }
 
 
-/* =========================================================
-   TEXT NORMALIZATION
-   ========================================================= */
+/* ==========================
+   Text normalization
+========================== */
 
-function normalizeText(text) {
+function normalizeText(text){
 
     return text
-
         .toLowerCase()
-
-        // Remove apostrophes
-        .replace(/['’]/g, "")
-
-        // Remove punctuation
-        .replace(/[^a-z0-9\s]/g, " ")
-
-        // Collapse multiple spaces
-        .replace(/\s+/g, " ")
-
+        .replace(/['’]/g,"")
+        .replace(/[^a-z0-9\s]/g," ")
+        .replace(/\s+/g," ")
         .trim();
 }
 
 
-/* =========================================================
-   LEVENSHTEIN DISTANCE
-   ========================================================= */
+/* ==========================
+   Levenshtein
+========================== */
 
-function levenshtein(a, b) {
+function levenshtein(a,b){
 
-    const matrix = [];
+    const matrix=[];
 
-    for (let i = 0; i <= b.length; i++) {
-
-        matrix[i] = [i];
-
+    for(let i=0;i<=b.length;i++){
+        matrix[i]=[i];
     }
 
-    for (let j = 0; j <= a.length; j++) {
-
-        matrix[0][j] = j;
-
+    for(let j=0;j<=a.length;j++){
+        matrix[0][j]=j;
     }
 
-    for (let i = 1; i <= b.length; i++) {
+    for(let i=1;i<=b.length;i++){
 
-        for (let j = 1; j <= a.length; j++) {
+        for(let j=1;j<=a.length;j++){
 
-            if (b.charAt(i - 1) === a.charAt(j - 1)) {
+            if(b.charAt(i-1)===a.charAt(j-1)){
 
-                matrix[i][j] =
-                    matrix[i - 1][j - 1];
+                matrix[i][j]=
+                    matrix[i-1][j-1];
 
-            } else {
+            }else{
 
-                matrix[i][j] = Math.min(
-
-                    matrix[i - 1][j] + 1,
-
-                    matrix[i][j - 1] + 1,
-
-                    matrix[i - 1][j - 1] + 1
-
+                matrix[i][j]=Math.min(
+                    matrix[i-1][j]+1,
+                    matrix[i][j-1]+1,
+                    matrix[i-1][j-1]+1
                 );
-
             }
-
         }
-
     }
 
     return matrix[b.length][a.length];
-
 }
 
 
-/* =========================================================
-   SIMILARITY SCORE
-   ========================================================= */
+/* ==========================
+   Similarity
+========================== */
 
-function similarity(a, b) {
+function similarity(a,b){
 
     a = normalizeText(a);
     b = normalizeText(b);
 
-    if (!a || !b) {
+    if(!a || !b){
         return 0;
     }
 
-    if (a === b) {
+    if(a===b){
         return 1;
     }
 
     const distance =
-        levenshtein(a, b);
+        levenshtein(a,b);
 
     const longest =
-        Math.max(a.length, b.length);
+        Math.max(a.length,b.length);
 
     return 1 - (distance / longest);
-
 }
 
 
-/* =========================================================
-   WORD-BASED SIMILARITY
-   ========================================================= */
+/* ==========================
+   Download card names
+========================== */
 
-function wordSimilarity(a, b) {
+async function getCardNames(){
 
-    const wordsA =
-        normalizeText(a).split(" ");
-
-    const wordsB =
-        normalizeText(b).split(" ");
-
-    let total = 0;
-
-    for (const wordA of wordsA) {
-
-        let best = 0;
-
-        for (const wordB of wordsB) {
-
-            const score =
-                similarity(wordA, wordB);
-
-            if (score > best) {
-                best = score;
-            }
-
-        }
-
-        total += best;
-
-    }
-
-    if (wordsA.length === 0) {
-        return 0;
-    }
-
-    return total / wordsA.length;
-
-}
-
-
-/* =========================================================
-   COMBINED SIMILARITY
-   ========================================================= */
-
-function cardSimilarity(spoken, cardName) {
-
-    const fullSimilarity =
-        similarity(spoken, cardName);
-
-    const wordScore =
-        wordSimilarity(spoken, cardName);
-
-    // Give slightly more importance to whole-name similarity
-    return (
-        fullSimilarity * 0.65 +
-        wordScore * 0.35
-    );
-
-}
-
-
-/* =========================================================
-   GET ALL CARD NAMES FROM SCRYFALL
-   ========================================================= */
-
-let cardNamesCache = null;
-
-async function getCardNames() {
-
-    if (cardNamesCache) {
+    if(cardNamesCache){
         return cardNamesCache;
     }
 
-    try {
+    try{
 
         const response =
             await fetch(
                 "https://api.scryfall.com/catalog/card-names"
             );
-
-        if (!response.ok) {
-            return null;
-        }
 
         const data =
             await response.json();
@@ -374,271 +268,190 @@ async function getCardNames() {
 
         return cardNamesCache;
 
-    } catch (error) {
+    }catch(error){
 
-        console.error(
-            "Could not download card names:",
-            error
-        );
+        console.error(error);
 
         return null;
     }
-
 }
 
 
-/* =========================================================
-   FIND CLOSEST CARD NAME
-   ========================================================= */
+/* ==========================
+   Fuzzy match
+========================== */
 
-async function findClosestCard(spokenText) {
+async function findClosestCard(spoken){
 
     const cardNames =
         await getCardNames();
 
-    if (!cardNames) {
+    if(!cardNames){
         return null;
     }
 
     let bestName = null;
     let bestScore = 0;
 
-    for (const cardName of cardNames) {
+    for(const cardName of cardNames){
 
         const score =
-            cardSimilarity(
-                spokenText,
+            similarity(
+                spoken,
                 cardName
             );
 
-        if (score > bestScore) {
+        if(score > bestScore){
 
             bestScore = score;
             bestName = cardName;
-
         }
-
     }
 
-    console.log(
-        "Best fuzzy match:",
-        bestName,
-        bestScore
-    );
-
-    /*
-       Minimum confidence.
-
-       0.82 = reasonably strong match.
-    */
-
-    if (bestScore >= 0.82) {
+    if(bestScore >= 0.82){
 
         return {
             name: bestName,
             score: bestScore
         };
-
     }
 
     return null;
-
 }
 
 
-/* =========================================================
-   SEARCH SCRYFALL
-   ========================================================= */
+/* ==========================
+   Main search
+========================== */
 
-async function findBestCard(candidates) {
+async function findBestCard(candidates){
 
-    // Remove duplicates
     candidates =
         [...new Set(candidates)];
 
+    // Exact match first
 
-    /*
-       STEP 1
-       Try exact matches for every
-       speech interpretation.
-    */
+    for(const candidate of candidates){
 
-    for (const candidate of candidates) {
-
-        try {
-
-            const url =
-                "https://api.scryfall.com/cards/named?exact=" +
-                encodeURIComponent(candidate);
+        try{
 
             const response =
-                await fetch(url);
+                await fetch(
+                    "https://api.scryfall.com/cards/named?exact=" +
+                    encodeURIComponent(candidate)
+                );
 
-            if (response.ok) {
+            if(response.ok){
 
                 const data =
                     await response.json();
 
-                showCard(data);
+                showCard(
+                    data,
+                    data.name
+                );
 
                 return;
-
             }
 
-        } catch (error) {
-
+        }catch(error){
             console.error(error);
-
         }
-
     }
 
-
-    /*
-       STEP 2
-       Fuzzy matching against all
-       Scryfall card names.
-    */
-
-    result.textContent =
-        "Finding closest card...";
-
+    // Fuzzy match
 
     let bestMatch = null;
     let bestScore = 0;
 
-
-    for (const candidate of candidates) {
+    for(const candidate of candidates){
 
         const match =
             await findClosestCard(candidate);
 
-        if (
+        if(
             match &&
             match.score > bestScore
-        ) {
+        ){
 
             bestMatch = match;
             bestScore = match.score;
-
         }
-
     }
 
+    if(bestMatch){
 
-    /*
-       STEP 3
-       Search the winning card
-       by exact name.
-    */
-
-    if (bestMatch) {
-
-        result.textContent =
-            "Found: " + bestMatch.name;
-
-
-        try {
-
-            const url =
-                "https://api.scryfall.com/cards/named?exact=" +
-                encodeURIComponent(
-                    bestMatch.name
-                );
+        try{
 
             const response =
-                await fetch(url);
+                await fetch(
+                    "https://api.scryfall.com/cards/named?exact=" +
+                    encodeURIComponent(bestMatch.name)
+                );
 
-            if (response.ok) {
+            if(response.ok){
 
                 const data =
                     await response.json();
 
-                showCard(data);
+                showCard(
+                    data,
+                    bestMatch.name
+                );
 
                 return;
-
             }
 
-        } catch (error) {
-
+        }catch(error){
             console.error(error);
-
         }
-
     }
 
-
-    /*
-       Nothing good enough found.
-    */
-
     result.textContent =
-        "Card not found.";
+        "Heard: " + lastHeardText +
+        "\nCard not found.";
 
     button.disabled = false;
-
 }
 
 
-/* =========================================================
-   DISPLAY CARD
-   ========================================================= */
+/* ==========================
+   Show card
+========================== */
 
-function showCard(data) {
+function showCard(data, matchedName){
 
     result.textContent =
-        data.name;
-
+        "Heard: " + lastHeardText +
+        "\nMatched: " + matchedName;
 
     let imageURL = null;
 
-
-    // Normal card
-    if (
+    if(
         data.image_uris &&
         data.image_uris.normal
-    ) {
-
+    ){
         imageURL =
             data.image_uris.normal;
-
     }
-
-
-    // Double-faced card
-    else if (
+    else if(
         data.card_faces &&
         data.card_faces[0] &&
         data.card_faces[0].image_uris
-    ) {
-
+    ){
         imageURL =
             data.card_faces[0]
                 .image_uris
                 .normal;
-
     }
 
+    if(imageURL){
 
-    if (imageURL) {
-
-        cardImage.src =
-            imageURL;
-
-        cardImage.style.display =
-            "block";
-
-    } else {
-
-        result.textContent =
-            data.name +
-            " (no image available)";
-
+        cardImage.src = imageURL;
+        cardImage.style.display = "block";
     }
 
     button.disabled = false;
-
 }
 
 </script>
