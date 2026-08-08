@@ -61,26 +61,7 @@ button:disabled{
     margin-top:30px;
 }
 
-#manualInput{
-    box-sizing:border-box;
-    width:100%;
-    font-size:20px;
-    padding:14px;
-    border-radius:10px;
-    border:none;
-    text-align:center;
-}
-
-#manualButton{
-    margin-top:10px;
-}
-
-#keywordSection{
-    width:90%;
-    max-width:500px;
-    margin-top:30px;
-}
-
+#manualInput,
 #keywordInput{
     box-sizing:border-box;
     width:100%;
@@ -91,8 +72,15 @@ button:disabled{
     text-align:center;
 }
 
+#manualButton,
 #keywordButton{
     margin-top:10px;
+}
+
+#keywordSection{
+    width:90%;
+    max-width:500px;
+    margin-top:30px;
 }
 
 #keywordResult{
@@ -138,10 +126,11 @@ button:disabled{
     id="manualInput"
     type="text"
     placeholder="Type difficult card name..."
-    autocomplete="off"
+    autocomplete="new-password"
     autocorrect="off"
     autocapitalize="off"
     spellcheck="false"
+    data-form-type="other"
 >
 
 <button id="manualButton">
@@ -162,10 +151,11 @@ button:disabled{
     id="keywordInput"
     type="text"
     placeholder="Keyword: haste, scry, connive..."
-    autocomplete="off"
+    autocomplete="new-password"
     autocorrect="off"
     autocapitalize="off"
     spellcheck="false"
+    data-form-type="other"
 >
 
 <button id="keywordButton">
@@ -226,6 +216,10 @@ let timeout = null;
 let searchCancelled = false;
 let isSearching = false;
 
+let keywordAbilitiesCache = null;
+let keywordActionsCache = null;
+let abilityWordsCache = null;
+
 
 /* =========================================================
    SPEECH RECOGNITION
@@ -260,23 +254,17 @@ else{
         5;
 
 
-    /* START */
-
     button.addEventListener(
         "click",
         startListening
     );
 
 
-    /* STOP SEARCH */
-
     stopButton.addEventListener(
         "click",
         stopSearch
     );
 
-
-    /* RESULT */
 
     recognition.onresult =
         async function(event){
@@ -301,7 +289,9 @@ else{
                     candidates.push(
                         transcript
                     );
+
                 }
+
             }
 
 
@@ -320,7 +310,9 @@ else{
 
 
             try{
+
                 recognition.stop();
+
             }
             catch(e){}
 
@@ -339,8 +331,6 @@ else{
 
         };
 
-
-    /* ERROR */
 
     recognition.onerror =
         function(event){
@@ -365,8 +355,6 @@ else{
 
         };
 
-
-    /* END */
 
     recognition.onend =
         function(){
@@ -393,15 +381,17 @@ else{
 function startListening(){
 
     if(!recognition){
+
         return;
+
     }
 
     clearTimeout(timeout);
 
     /*
-       Improvement 3:
-       Clear the manual card-name field whenever
-       a new card search starts.
+       Improvement 5:
+       Clear the card search field when a new
+       card search starts.
     */
 
     manualInput.value = "";
@@ -420,12 +410,13 @@ function startListening(){
     button.disabled = true;
 
     /*
-       Stop is only for the search phase.
+       Stop is only active during searching.
     */
 
     stopButton.disabled = true;
 
     searchCancelled = false;
+
 
     try{
 
@@ -447,13 +438,16 @@ function startListening(){
             function(){
 
                 try{
+
                     recognition.stop();
+
                 }
                 catch(e){}
 
             },
             3000
         );
+
 }
 
 
@@ -502,11 +496,15 @@ function levenshtein(a,b){
     const matrix=[];
 
     for(let i=0;i<=b.length;i++){
+
         matrix[i]=[i];
+
     }
 
     for(let j=0;j<=a.length;j++){
+
         matrix[0][j]=j;
+
     }
 
     for(let i=1;i<=b.length;i++){
@@ -532,10 +530,13 @@ function levenshtein(a,b){
                     );
 
             }
+
         }
+
     }
 
     return matrix[b.length][a.length];
+
 }
 
 
@@ -549,21 +550,29 @@ function similarity(a,b){
     b = normalizeText(b);
 
     if(!a || !b){
+
         return 0;
+
     }
 
     if(a === b){
+
         return 1;
+
     }
 
     const distance =
         levenshtein(a,b);
 
     const longest =
-        Math.max(a.length,b.length);
+        Math.max(
+            a.length,
+            b.length
+        );
 
     return 1 -
         distance / longest;
+
 }
 
 
@@ -574,7 +583,9 @@ function similarity(a,b){
 async function getCardNames(){
 
     if(cardNamesCache){
+
         return cardNamesCache;
+
     }
 
     try{
@@ -585,7 +596,9 @@ async function getCardNames(){
             );
 
         if(!response.ok){
+
             return null;
+
         }
 
         const data =
@@ -602,7 +615,9 @@ async function getCardNames(){
         console.error(error);
 
         return null;
+
     }
+
 }
 
 
@@ -613,7 +628,9 @@ async function getCardNames(){
 async function getEnglishCard(cardName){
 
     if(searchCancelled){
+
         return null;
+
     }
 
     try{
@@ -623,22 +640,31 @@ async function getEnglishCard(cardName){
             cardName +
             '" lang:en';
 
+
         const response =
             await fetch(
                 "https://api.scryfall.com/cards/search?q=" +
                 encodeURIComponent(query)
             );
 
+
         if(searchCancelled){
+
             return null;
+
         }
 
+
         if(!response.ok){
+
             return null;
+
         }
+
 
         const data =
             await response.json();
+
 
         if(
             data.data &&
@@ -671,6 +697,7 @@ async function getEnglishCard(cardName){
     }
 
     return null;
+
 }
 
 
@@ -683,20 +710,28 @@ async function findClosestCard(spoken){
     const cardNames =
         await getCardNames();
 
+
     if(!cardNames){
+
         return null;
+
     }
+
 
     let bestName = null;
     let bestScore = 0;
+
 
     for(
         const cardName of cardNames
     ){
 
         if(searchCancelled){
+
             return null;
+
         }
+
 
         const score =
             similarity(
@@ -704,24 +739,31 @@ async function findClosestCard(spoken){
                 cardName
             );
 
+
         if(score > bestScore){
 
             bestScore = score;
             bestName = cardName;
 
         }
+
     }
+
 
     if(bestScore >= 0.82){
 
         return {
+
             name:bestName,
             score:bestScore
+
         };
 
     }
 
+
     return null;
+
 }
 
 
@@ -733,6 +775,7 @@ function phoneticNormalize(text){
 
     let s =
         normalizeText(text);
+
 
     s =
         s
@@ -753,13 +796,16 @@ function phoneticNormalize(text){
         .replace(/oo/g,"u")
         .replace(/ou/g,"u");
 
+
     s =
         s.replace(
             /(.)\1+/g,
             "$1"
         );
 
+
     return s;
+
 }
 
 
@@ -773,6 +819,7 @@ function phoneticSimilarity(a,b){
         phoneticNormalize(a),
         phoneticNormalize(b)
     );
+
 }
 
 
@@ -787,12 +834,17 @@ async function findPhoneticCard(
     const cardNames =
         await getCardNames();
 
+
     if(!cardNames){
+
         return null;
+
     }
+
 
     let bestName = null;
     let bestScore = 0;
+
 
     for(
         const candidate of candidates
@@ -803,8 +855,11 @@ async function findPhoneticCard(
         ){
 
             if(searchCancelled){
+
                 return null;
+
             }
+
 
             const score =
                 phoneticSimilarity(
@@ -812,14 +867,18 @@ async function findPhoneticCard(
                     cardName
                 );
 
+
             if(score > bestScore){
 
                 bestScore = score;
                 bestName = cardName;
 
             }
+
         }
+
     }
+
 
     console.log(
         "Phonetic:",
@@ -827,16 +886,21 @@ async function findPhoneticCard(
         bestScore
     );
 
+
     if(bestScore >= 0.78){
 
         return {
+
             name:bestName,
             score:bestScore
+
         };
 
     }
 
+
     return null;
+
 }
 
 
@@ -863,8 +927,11 @@ async function findBestCard(
     ){
 
         if(searchCancelled){
+
             return;
+
         }
+
 
         try{
 
@@ -874,23 +941,32 @@ async function findBestCard(
                     encodeURIComponent(candidate)
                 );
 
+
             if(searchCancelled){
+
                 return;
+
             }
+
 
             if(response.ok){
 
                 const data =
                     await response.json();
 
+
                 const englishCard =
                     await getEnglishCard(
                         data.name
                     );
 
+
                 if(searchCancelled){
+
                     return;
+
                 }
+
 
                 if(englishCard){
 
@@ -899,6 +975,7 @@ async function findBestCard(
                         englishCard.name,
                         "Exact Match"
                     );
+
 
                     isSearching = false;
                     stopButton.disabled = true;
@@ -915,6 +992,7 @@ async function findBestCard(
             console.error(error);
 
         }
+
     }
 
 
@@ -927,8 +1005,11 @@ async function findBestCard(
     ){
 
         if(searchCancelled){
+
             return;
+
         }
+
 
         try{
 
@@ -938,23 +1019,32 @@ async function findBestCard(
                     encodeURIComponent(candidate)
                 );
 
+
             if(searchCancelled){
+
                 return;
+
             }
+
 
             if(response.ok){
 
                 const data =
                     await response.json();
 
+
                 const englishCard =
                     await getEnglishCard(
                         data.name
                     );
 
+
                 if(searchCancelled){
+
                     return;
+
                 }
+
 
                 if(englishCard){
 
@@ -963,6 +1053,7 @@ async function findBestCard(
                         englishCard.name,
                         "Scryfall Fuzzy"
                     );
+
 
                     isSearching = false;
                     stopButton.disabled = true;
@@ -979,6 +1070,7 @@ async function findBestCard(
             console.error(error);
 
         }
+
     }
 
 
@@ -1005,9 +1097,13 @@ async function findBestCard(
                 candidate
             );
 
+
         if(searchCancelled){
+
             return;
+
         }
+
 
         if(
             match &&
@@ -1018,6 +1114,7 @@ async function findBestCard(
             bestScore = match.score;
 
         }
+
     }
 
 
@@ -1028,9 +1125,13 @@ async function findBestCard(
                 bestMatch.name
             );
 
+
         if(searchCancelled){
+
             return;
+
         }
+
 
         if(englishCard){
 
@@ -1039,6 +1140,7 @@ async function findBestCard(
                 englishCard.name,
                 "Local Fuzzy"
             );
+
 
             isSearching = false;
             stopButton.disabled = true;
@@ -1067,7 +1169,9 @@ async function findBestCard(
 
 
     if(searchCancelled){
+
         return;
+
     }
 
 
@@ -1078,9 +1182,13 @@ async function findBestCard(
                 phonetic.name
             );
 
+
         if(searchCancelled){
+
             return;
+
         }
+
 
         if(englishCard){
 
@@ -1089,6 +1197,7 @@ async function findBestCard(
                 englishCard.name,
                 "Phonetic Match"
             );
+
 
             isSearching = false;
             stopButton.disabled = true;
@@ -1106,6 +1215,7 @@ async function findBestCard(
             "Heard: " +
             lastHeardText +
             "\nCard not found.";
+
 
         isSearching = false;
         stopButton.disabled = true;
@@ -1126,13 +1236,11 @@ function showCard(
 ){
 
     if(searchCancelled){
+
         return;
+
     }
 
-    /*
-       Extra safety:
-       only English cards are allowed.
-    */
 
     if(data.lang !== "en"){
 
@@ -1227,6 +1335,7 @@ function manualSearch(){
     const text =
         manualInput.value.trim();
 
+
     if(!text){
 
         return;
@@ -1235,27 +1344,28 @@ function manualSearch(){
 
 
     /*
-       Cancel any current operation.
+       Save the entered name first.
+       Then clear the input field immediately.
     */
+
+    manualInput.value = "";
+
 
     searchCancelled = true;
     isSearching = false;
 
+
     try{
 
-        recognition.abort();
+        if(recognition){
+
+            recognition.abort();
+
+        }
 
     }
     catch(e){}
 
-
-    /*
-       Improvement 3:
-       The field is cleared immediately when
-       the new search starts.
-    */
-
-    manualInput.value = "";
 
     lastHeardText = "";
 
@@ -1284,17 +1394,8 @@ function manualSearch(){
 
 
 /* =========================================================
-   KEYWORD CATALOGS
+   KEYWORD CATALOG
 ========================================================= */
-
-let keywordAbilitiesCache = null;
-let keywordActionsCache = null;
-let abilityWordsCache = null;
-
-
-/* ---------------------------------------------------------
-   GET KEYWORD CATALOG
---------------------------------------------------------- */
 
 async function getKeywordCatalog(
     catalogName
@@ -1308,12 +1409,17 @@ async function getKeywordCatalog(
                 catalogName
             );
 
+
         if(!response.ok){
+
             return null;
+
         }
+
 
         const data =
             await response.json();
+
 
         return data.data || null;
 
@@ -1340,15 +1446,13 @@ async function findKeywordType(
     const normalized =
         normalizeText(keyword);
 
+
     if(!normalized){
+
         return null;
+
     }
 
-
-    /*
-       Load the three useful Scryfall catalogs.
-       Ability words are included as an extra convenience.
-    */
 
     if(!keywordAbilitiesCache){
 
@@ -1359,6 +1463,7 @@ async function findKeywordType(
 
     }
 
+
     if(!keywordActionsCache){
 
         keywordActionsCache =
@@ -1367,6 +1472,7 @@ async function findKeywordType(
             );
 
     }
+
 
     if(!abilityWordsCache){
 
@@ -1378,13 +1484,14 @@ async function findKeywordType(
     }
 
 
-    function matches(
-        list
-    ){
+    function matches(list){
 
         if(!list){
+
             return false;
+
         }
+
 
         return list.some(
             function(item){
@@ -1420,6 +1527,7 @@ async function findKeywordType(
 
 
     return null;
+
 }
 
 
@@ -1433,23 +1541,11 @@ function extractReminderText(
 ){
 
     if(!oracleText){
+
         return null;
+
     }
 
-
-    /*
-       Reminder text in Scryfall's oracle text is
-       enclosed in parentheses.
-
-       Example:
-
-       Haste
-       (This creature can attack and T as soon as it
-       comes under your control.)
-
-       We look for parenthetical text associated with
-       the requested keyword.
-    */
 
     const lines =
         oracleText.split("\n");
@@ -1468,6 +1564,7 @@ function extractReminderText(
         const line =
             lines[i];
 
+
         const normalizedLine =
             normalizeText(line);
 
@@ -1483,6 +1580,7 @@ function extractReminderText(
                     /\(([^()]*)\)/
                 );
 
+
             if(match){
 
                 return match[1].trim();
@@ -1493,12 +1591,6 @@ function extractReminderText(
 
     }
 
-
-    /*
-       Second attempt:
-       search the entire oracle text for parenthetical
-       reminder text.
-    */
 
     const matches =
         oracleText.match(
@@ -1517,6 +1609,7 @@ function extractReminderText(
                 .slice(1,-1)
                 .trim();
 
+
             if(
                 normalizeText(clean)
                 .includes(normalizedKeyword)
@@ -1532,11 +1625,12 @@ function extractReminderText(
 
 
     return null;
+
 }
 
 
 /* =========================================================
-   GET KEYWORD DESCRIPTION FROM SCRYFALL
+   GET KEYWORD DESCRIPTION
 ========================================================= */
 
 async function getKeywordDescription(
@@ -1544,19 +1638,16 @@ async function getKeywordDescription(
 ){
 
     if(searchCancelled){
+
         return null;
+
     }
 
 
-    /*
-       Search English cards that actually have the
-       requested keyword.
-    */
-
     const query =
-        'keyword:' +
+        "keyword:" +
         keyword +
-        ' lang:en';
+        " lang:en";
 
 
     try{
@@ -1568,9 +1659,13 @@ async function getKeywordDescription(
                 "&unique=cards"
             );
 
+
         if(searchCancelled){
+
             return null;
+
         }
+
 
         if(!response.ok){
 
@@ -1593,21 +1688,21 @@ async function getKeywordDescription(
         }
 
 
-        /*
-           Look through the first results for a card
-           containing actual reminder text.
-        */
-
         for(
             const card of data.data
         ){
 
             if(searchCancelled){
+
                 return null;
+
             }
 
+
             if(card.lang !== "en"){
+
                 continue;
+
             }
 
 
@@ -1621,8 +1716,10 @@ async function getKeywordDescription(
             if(description){
 
                 return {
+
                     description:description,
                     sourceCard:card.name
+
                 };
 
             }
@@ -1638,6 +1735,7 @@ async function getKeywordDescription(
 
 
     return null;
+
 }
 
 
@@ -1670,6 +1768,7 @@ async function searchKeyword(){
     const keyword =
         keywordInput.value.trim();
 
+
     if(!keyword){
 
         return;
@@ -1678,11 +1777,17 @@ async function searchKeyword(){
 
 
     /*
-       Cancel any card search.
+       Improvement 5:
+       Clear the keyword field when a new
+       keyword search starts.
     */
+
+    keywordInput.value = "";
+
 
     searchCancelled = true;
     isSearching = false;
+
 
     try{
 
@@ -1702,13 +1807,10 @@ async function searchKeyword(){
     keywordTitle.textContent =
         "";
 
+
     keywordDescription.textContent =
         "Searching...";
 
-
-    /*
-       Start a new keyword operation.
-    */
 
     searchCancelled = false;
 
@@ -1720,7 +1822,9 @@ async function searchKeyword(){
 
 
     if(searchCancelled){
+
         return;
+
     }
 
 
@@ -1729,13 +1833,16 @@ async function searchKeyword(){
         keywordTitle.textContent =
             keyword;
 
+
         keywordDescription.textContent =
             "Keyword not found.";
+
 
         keywordResult.scrollIntoView({
             behavior:"smooth",
             block:"start"
         });
+
 
         return;
 
@@ -1753,7 +1860,9 @@ async function searchKeyword(){
 
 
     if(searchCancelled){
+
         return;
+
     }
 
 
@@ -1774,12 +1883,6 @@ async function searchKeyword(){
 
     }
 
-
-    /*
-       Improvement 4:
-       Automatically move the page to the
-       explanation so it is immediately readable.
-    */
 
     keywordResult.scrollIntoView({
         behavior:"smooth",
