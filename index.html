@@ -1,1 +1,1739 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+<title>MTG Voice Card</title>
+
+<style>
+
+body{
+    margin:0;
+    background:#111;
+    color:white;
+    font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+    min-height:100vh;
+
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+
+    text-align:center;
+}
+
+button{
+    font-size:22px;
+    padding:16px 24px;
+    border-radius:15px;
+    border:none;
+    background:white;
+    color:black;
+    margin:5px;
+}
+
+button:disabled{
+    opacity:.5;
+}
+
+#stopButton{
+    background:#d33;
+    color:white;
+}
+
+#result{
+    margin-top:20px;
+    font-size:19px;
+    max-width:90%;
+    white-space:pre-line;
+    min-height:70px;
+}
+
+#card{
+    display:none;
+    max-width:90%;
+    max-height:65vh;
+    margin-top:20px;
+    border-radius:12px;
+}
+
+#manualSearch{
+    margin-top:30px;
+    width:90%;
+    max-width:500px;
+
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+}
+
+#manualInput{
+    box-sizing:border-box;
+    width:100%;
+
+    font-size:20px;
+    padding:14px;
+
+    border-radius:10px;
+    border:none;
+
+    text-align:center;
+}
+
+#manualSearchButton{
+    margin-top:10px;
+}
+
+</style>
+</head>
+
+
+<body>
+
+
+<!-- ==========================
+     VOICE CONTROLS
+========================== -->
+
+<div>
+
+    <button id="listenButton">
+        🎤 Speak card name
+    </button>
+
+    <button id="stopButton" disabled>
+        ⏹ Stop
+    </button>
+
+</div>
+
+
+<!-- ==========================
+     RESULT
+========================== -->
+
+<div id="result">
+    Tap the button and say a Magic card name.
+</div>
+
+
+<!-- ==========================
+     CARD IMAGE
+========================== -->
+
+<img
+    id="card"
+    alt="Magic card"
+>
+
+
+<!-- ==========================
+     MANUAL SEARCH
+========================== -->
+
+<div id="manualSearch">
+
+    <input
+        id="manualInput"
+        type="text"
+        placeholder="Type difficult card name..."
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+    >
+
+    <button id="manualSearchButton">
+        🔎 Search card
+    </button>
+
+</div>
+
+
+<script>
+
+
+/* =========================================================
+   ELEMENTS
+========================================================= */
+
+const button =
+    document.getElementById("listenButton");
+
+const stopButton =
+    document.getElementById("stopButton");
+
+const result =
+    document.getElementById("result");
+
+const cardImage =
+    document.getElementById("card");
+
+const manualInput =
+    document.getElementById("manualInput");
+
+const manualSearchButton =
+    document.getElementById("manualSearchButton");
+
+
+/* =========================================================
+   GLOBAL VARIABLES
+========================================================= */
+
+let lastHeardText = "";
+
+let cardNamesCache = null;
+
+let foundMethod = "";
+
+let recognition = null;
+
+let timeout = null;
+
+/*
+   Every search gets its own ID.
+
+   This prevents a search that was already running
+   from displaying a result after the user presses Stop.
+*/
+
+let searchID = 0;
+
+
+/* =========================================================
+   SPEECH RECOGNITION
+========================================================= */
+
+const SpeechRecognition =
+    window.SpeechRecognition ||
+    window.webkitSpeechRecognition;
+
+
+if(!SpeechRecognition){
+
+    result.textContent =
+        "Speech recognition is not supported on this iPad/browser.";
+
+}
+else{
+
+    recognition =
+        new SpeechRecognition();
+
+    recognition.lang =
+        "en-US";
+
+    recognition.continuous =
+        false;
+
+    recognition.interimResults =
+        false;
+
+    recognition.maxAlternatives =
+        5;
+
+
+    /* =====================================================
+       START LISTENING
+    ===================================================== */
+
+    button.addEventListener("click", () => {
+
+        startListening();
+
+    });
+
+
+    /* =====================================================
+       STOP BUTTON
+    ===================================================== */
+
+    stopButton.addEventListener("click", () => {
+
+        stopEverything();
+
+    });
+
+
+    /* =====================================================
+       SPEECH RESULT
+    ===================================================== */
+
+    recognition.onresult =
+        async (event) => {
+
+            clearTimeout(timeout);
+
+            /*
+               Collect all speech alternatives.
+            */
+
+            const candidates = [];
+
+            for(
+                let i = 0;
+                i < event.results[0].length;
+                i++
+            ){
+
+                const transcript =
+                    event.results[0][i]
+                        .transcript
+                        .trim();
+
+                if(transcript){
+
+                    candidates.push(
+                        transcript
+                    );
+                }
+            }
+
+
+            /*
+               First alternative is what Safari
+               considers the most likely result.
+            */
+
+            if(candidates.length > 0){
+
+                lastHeardText =
+                    candidates[0];
+
+            }
+
+
+            result.textContent =
+                "Heard: " +
+                lastHeardText +
+                "\nSearching...";
+
+
+            /*
+               Create a new search ID.
+            */
+
+            const thisSearchID =
+                ++searchID;
+
+
+            /*
+               Stop listening.
+            */
+
+            try{
+                recognition.stop();
+            }
+            catch(e){}
+
+
+            updateListeningButtons(
+                false
+            );
+
+
+            /*
+               Search the card database.
+            */
+
+            await findBestCard(
+                candidates,
+                thisSearchID
+            );
+
+        };
+
+
+    /* =====================================================
+       SPEECH ERROR
+    ===================================================== */
+
+    recognition.onerror =
+        (event) => {
+
+            clearTimeout(timeout);
+
+            /*
+               "aborted" is normal when the user presses Stop.
+            */
+
+            if(event.error !== "aborted"){
+
+                result.textContent =
+                    "Speech error: " +
+                    event.error;
+            }
+
+            updateListeningButtons(
+                false
+            );
+
+        };
+
+
+    /* =====================================================
+       SPEECH END
+    ===================================================== */
+
+    recognition.onend =
+        () => {
+
+            clearTimeout(timeout);
+
+            updateListeningButtons(
+                false
+            );
+
+        };
+
+}
+
+
+/* =========================================================
+   START LISTENING
+========================================================= */
+
+function startListening(){
+
+    if(!recognition){
+        return;
+    }
+
+
+    /*
+       Cancel any previous search.
+    */
+
+    searchID++;
+
+
+    clearTimeout(timeout);
+
+
+    lastHeardText = "";
+
+    foundMethod = "";
+
+
+    /*
+       Hide previous card.
+    */
+
+    cardImage.style.display =
+        "none";
+
+
+    result.textContent =
+        "🎤 Listening...";
+
+
+    updateListeningButtons(
+        true
+    );
+
+
+    try{
+
+        recognition.start();
+
+    }
+    catch(error){
+
+        console.log(
+            "Recognition start:",
+            error
+        );
+
+    }
+
+
+    /*
+       Maximum listening time:
+       3 seconds.
+    */
+
+    timeout =
+        setTimeout(() => {
+
+            try{
+
+                recognition.stop();
+
+            }
+            catch(error){}
+
+        },3000);
+
+}
+
+
+/* =========================================================
+   STOP EVERYTHING
+========================================================= */
+
+function stopEverything(){
+
+    /*
+       Increment search ID.
+
+       Any search that is currently waiting for
+       Scryfall will now be considered obsolete.
+    */
+
+    searchID++;
+
+
+    clearTimeout(timeout);
+
+
+    /*
+       Stop speech recognition.
+    */
+
+    if(recognition){
+
+        try{
+            recognition.abort();
+        }
+        catch(error){
+
+            try{
+                recognition.stop();
+            }
+            catch(e){}
+        }
+    }
+
+
+    updateListeningButtons(
+        false
+    );
+
+
+    result.textContent =
+        "⏹ Stopped.";
+
+}
+
+
+/* =========================================================
+   BUTTON STATES
+========================================================= */
+
+function updateListeningButtons(isListening){
+
+    button.disabled =
+        isListening;
+
+    stopButton.disabled =
+        !isListening;
+
+}
+
+
+/* =========================================================
+   MANUAL SEARCH
+========================================================= */
+
+manualSearchButton.addEventListener(
+    "click",
+    () => {
+
+        searchManualInput();
+
+    }
+);
+
+
+/*
+   Pressing Enter in the text box
+   also starts the search.
+*/
+
+manualInput.addEventListener(
+    "keydown",
+    (event) => {
+
+        if(event.key === "Enter"){
+
+            event.preventDefault();
+
+            searchManualInput();
+
+        }
+
+    }
+);
+
+
+/* =========================================================
+   SEARCH MANUAL INPUT
+========================================================= */
+
+function searchManualInput(){
+
+    const text =
+        manualInput.value.trim();
+
+
+    if(!text){
+
+        result.textContent =
+            "Please enter a card name.";
+
+        return;
+    }
+
+
+    /*
+       Cancel any previous search.
+    */
+
+    searchID++;
+
+    const thisSearchID =
+        searchID;
+
+
+    /*
+       Manual input is not speech,
+       so clear the Heard line.
+    */
+
+    lastHeardText =
+        "";
+
+    foundMethod =
+        "";
+
+
+    /*
+       Hide previous card.
+    */
+
+    cardImage.style.display =
+        "none";
+
+
+    result.textContent =
+        "Typed: " +
+        text +
+        "\nSearching...";
+
+
+    /*
+       Search using exactly the same
+       matching system as speech.
+    */
+
+    findBestCard(
+        [text],
+        thisSearchID
+    );
+
+}
+
+
+/* =========================================================
+   TEXT NORMALIZATION
+========================================================= */
+
+function normalizeText(text){
+
+    return text
+        .toLowerCase()
+        .replace(/['’]/g,"")
+        .replace(/[^a-z0-9\s]/g," ")
+        .replace(/\s+/g," ")
+        .trim();
+
+}
+
+
+/* =========================================================
+   LEVENSHTEIN DISTANCE
+========================================================= */
+
+function levenshtein(a,b){
+
+    const matrix = [];
+
+
+    for(
+        let i = 0;
+        i <= b.length;
+        i++
+    ){
+
+        matrix[i] = [i];
+
+    }
+
+
+    for(
+        let j = 0;
+        j <= a.length;
+        j++
+    ){
+
+        matrix[0][j] = j;
+
+    }
+
+
+    for(
+        let i = 1;
+        i <= b.length;
+        i++
+    ){
+
+        for(
+            let j = 1;
+            j <= a.length;
+            j++
+        ){
+
+            if(
+                b.charAt(i-1) ===
+                a.charAt(j-1)
+            ){
+
+                matrix[i][j] =
+                    matrix[i-1][j-1];
+
+            }
+            else{
+
+                matrix[i][j] =
+                    Math.min(
+
+                        matrix[i-1][j] + 1,
+
+                        matrix[i][j-1] + 1,
+
+                        matrix[i-1][j-1] + 1
+
+                    );
+
+            }
+
+        }
+
+    }
+
+
+    return matrix[b.length][a.length];
+
+}
+
+
+/* =========================================================
+   NORMAL TEXT SIMILARITY
+========================================================= */
+
+function similarity(a,b){
+
+    a =
+        normalizeText(a);
+
+    b =
+        normalizeText(b);
+
+
+    if(!a || !b){
+
+        return 0;
+
+    }
+
+
+    if(a === b){
+
+        return 1;
+
+    }
+
+
+    const distance =
+        levenshtein(a,b);
+
+
+    const longest =
+        Math.max(
+            a.length,
+            b.length
+        );
+
+
+    return 1 -
+        (
+            distance /
+            longest
+        );
+
+}
+
+
+/* =========================================================
+   PHONETIC NORMALIZATION
+========================================================= */
+
+function phoneticNormalize(text){
+
+    let s =
+        normalizeText(text);
+
+
+    /*
+       Common English speech variations.
+    */
+
+    s =
+        s
+        .replace(/ph/g,"f")
+        .replace(/th/g,"t")
+        .replace(/wh/g,"w")
+        .replace(/ck/g,"k")
+        .replace(/qu/g,"kw")
+        .replace(/c(?=[eiy])/g,"s")
+        .replace(/c/g,"k")
+        .replace(/q/g,"k")
+        .replace(/x/g,"ks")
+        .replace(/z/g,"s")
+        .replace(/j/g,"y");
+
+
+    /*
+       Vowel combinations.
+    */
+
+    s =
+        s
+        .replace(/ae/g,"a")
+        .replace(/oe/g,"o")
+        .replace(/ee/g,"i")
+        .replace(/oo/g,"u")
+        .replace(/ou/g,"u");
+
+
+    /*
+       Remove repeated letters.
+    */
+
+    s =
+        s.replace(
+            /(.)\1+/g,
+            "$1"
+        );
+
+
+    /*
+       Reduce vowels after the first
+       character of each word.
+    */
+
+    const words =
+        s
+        .split(" ")
+        .filter(Boolean);
+
+
+    const processed =
+        words.map(
+            word => {
+
+                if(word.length <= 2){
+
+                    return word;
+
+                }
+
+
+                const first =
+                    word.charAt(0);
+
+
+                const rest =
+                    word
+                    .substring(1)
+                    .replace(
+                        /[aeiou]/g,
+                        ""
+                    );
+
+
+                return first + rest;
+
+            }
+        );
+
+
+    return processed.join(" ");
+
+}
+
+
+/* =========================================================
+   PHONETIC SIMILARITY
+========================================================= */
+
+function phoneticSimilarity(a,b){
+
+    const pa =
+        phoneticNormalize(a);
+
+    const pb =
+        phoneticNormalize(b);
+
+
+    if(!pa || !pb){
+
+        return 0;
+
+    }
+
+
+    if(pa === pb){
+
+        return 1;
+
+    }
+
+
+    return similarity(
+        pa,
+        pb
+    );
+
+}
+
+
+/* =========================================================
+   WORD-BASED PHONETIC SIMILARITY
+========================================================= */
+
+function wordPhoneticSimilarity(a,b){
+
+    const wordsA =
+        phoneticNormalize(a)
+        .split(" ")
+        .filter(Boolean);
+
+
+    const wordsB =
+        phoneticNormalize(b)
+        .split(" ")
+        .filter(Boolean);
+
+
+    if(
+        wordsA.length === 0 ||
+        wordsB.length === 0
+    ){
+
+        return 0;
+
+    }
+
+
+    let total = 0;
+
+
+    for(
+        const wordA of wordsA
+    ){
+
+        let best = 0;
+
+
+        for(
+            const wordB of wordsB
+        ){
+
+            const score =
+                similarity(
+                    wordA,
+                    wordB
+                );
+
+
+            if(score > best){
+
+                best = score;
+
+            }
+
+        }
+
+
+        total += best;
+
+    }
+
+
+    return (
+        total /
+        wordsA.length
+    );
+
+}
+
+
+/* =========================================================
+   COMBINED PHONETIC SCORE
+========================================================= */
+
+function cardPhoneticScore(
+    spoken,
+    cardName
+){
+
+    const whole =
+        phoneticSimilarity(
+            spoken,
+            cardName
+        );
+
+
+    const words =
+        wordPhoneticSimilarity(
+            spoken,
+            cardName
+        );
+
+
+    return (
+        whole * 0.60 +
+        words * 0.40
+    );
+
+}
+
+
+/* =========================================================
+   DOWNLOAD CARD NAMES
+========================================================= */
+
+async function getCardNames(){
+
+    if(cardNamesCache){
+
+        return cardNamesCache;
+
+    }
+
+
+    try{
+
+        const response =
+            await fetch(
+                "https://api.scryfall.com/catalog/card-names"
+            );
+
+
+        if(!response.ok){
+
+            return null;
+
+        }
+
+
+        const data =
+            await response.json();
+
+
+        cardNamesCache =
+            data.data;
+
+
+        return cardNamesCache;
+
+    }
+    catch(error){
+
+        console.error(
+            "Could not download card names:",
+            error
+        );
+
+
+        return null;
+
+    }
+
+}
+
+
+/* =========================================================
+   LOCAL FUZZY MATCH
+========================================================= */
+
+async function findClosestCard(
+    spoken
+){
+
+    const cardNames =
+        await getCardNames();
+
+
+    if(!cardNames){
+
+        return null;
+
+    }
+
+
+    let bestName =
+        null;
+
+    let bestScore =
+        0;
+
+
+    for(
+        const cardName of cardNames
+    ){
+
+        const score =
+            similarity(
+                spoken,
+                cardName
+            );
+
+
+        if(score > bestScore){
+
+            bestScore =
+                score;
+
+            bestName =
+                cardName;
+
+        }
+
+    }
+
+
+    if(bestScore >= 0.82){
+
+        return {
+
+            name:
+                bestName,
+
+            score:
+                bestScore
+
+        };
+
+    }
+
+
+    return null;
+
+}
+
+
+/* =========================================================
+   PHONETIC MATCH
+========================================================= */
+
+async function findPhoneticCard(
+    candidates
+){
+
+    const cardNames =
+        await getCardNames();
+
+
+    if(!cardNames){
+
+        return null;
+
+    }
+
+
+    let bestName =
+        null;
+
+    let bestScore =
+        0;
+
+
+    for(
+        const candidate of candidates
+    ){
+
+        for(
+            const cardName of cardNames
+        ){
+
+            const score =
+                cardPhoneticScore(
+                    candidate,
+                    cardName
+                );
+
+
+            if(score > bestScore){
+
+                bestScore =
+                    score;
+
+                bestName =
+                    cardName;
+
+            }
+
+        }
+
+    }
+
+
+    console.log(
+        "Best phonetic match:",
+        bestName,
+        bestScore
+    );
+
+
+    /*
+       Current threshold.
+
+       We can adjust this after
+       testing real difficult names.
+    */
+
+    if(bestScore >= 0.78){
+
+        return {
+
+            name:
+                bestName,
+
+            score:
+                bestScore
+
+        };
+
+    }
+
+
+    return null;
+
+}
+
+
+/* =========================================================
+   MAIN SEARCH
+========================================================= */
+
+async function findBestCard(
+    candidates,
+    thisSearchID
+){
+
+    candidates =
+        [...new Set(candidates)];
+
+
+    /*
+       Make sure the search has not
+       already been cancelled.
+    */
+
+    if(thisSearchID !== searchID){
+
+        return;
+
+    }
+
+
+    /* =====================================================
+       STEP 1 - EXACT MATCH
+    ===================================================== */
+
+    for(
+        const candidate of candidates
+    ){
+
+        if(thisSearchID !== searchID){
+
+            return;
+
+        }
+
+
+        try{
+
+            const response =
+                await fetch(
+                    "https://api.scryfall.com/cards/named?exact=" +
+                    encodeURIComponent(
+                        candidate
+                    )
+                );
+
+
+            if(
+                thisSearchID !== searchID
+            ){
+
+                return;
+
+            }
+
+
+            if(response.ok){
+
+                const data =
+                    await response.json();
+
+
+                if(
+                    thisSearchID !== searchID
+                ){
+
+                    return;
+
+                }
+
+
+                foundMethod =
+                    "Exact Match";
+
+
+                showCard(
+                    data,
+                    data.name,
+                    thisSearchID
+                );
+
+
+                return;
+
+            }
+
+        }
+        catch(error){
+
+            console.error(error);
+
+        }
+
+    }
+
+
+    /* =====================================================
+       STEP 2 - SCRYFALL FUZZY
+    ===================================================== */
+
+    for(
+        const candidate of candidates
+    ){
+
+        if(thisSearchID !== searchID){
+
+            return;
+
+        }
+
+
+        try{
+
+            const response =
+                await fetch(
+                    "https://api.scryfall.com/cards/named?fuzzy=" +
+                    encodeURIComponent(
+                        candidate
+                    )
+                );
+
+
+            if(
+                thisSearchID !== searchID
+            ){
+
+                return;
+
+            }
+
+
+            if(response.ok){
+
+                const data =
+                    await response.json();
+
+
+                if(
+                    thisSearchID !== searchID
+                ){
+
+                    return;
+
+                }
+
+
+                foundMethod =
+                    "Scryfall Fuzzy";
+
+
+                showCard(
+                    data,
+                    data.name,
+                    thisSearchID
+                );
+
+
+                return;
+
+            }
+
+        }
+        catch(error){
+
+            console.error(error);
+
+        }
+
+    }
+
+
+    /* =====================================================
+       STEP 3 - LOCAL FUZZY
+    ===================================================== */
+
+    result.textContent =
+        (
+            lastHeardText
+                ? "Heard: " + lastHeardText
+                : "Typed: " + candidates[0]
+        ) +
+        "\nTrying Local Fuzzy...";
+
+
+    let bestLocalMatch =
+        null;
+
+    let bestLocalScore =
+        0;
+
+
+    for(
+        const candidate of candidates
+    ){
+
+        if(
+            thisSearchID !== searchID
+        ){
+
+            return;
+
+        }
+
+
+        const match =
+            await findClosestCard(
+                candidate
+            );
+
+
+        if(
+            thisSearchID !== searchID
+        ){
+
+            return;
+
+        }
+
+
+        if(
+            match &&
+            match.score >
+            bestLocalScore
+        ){
+
+            bestLocalMatch =
+                match;
+
+            bestLocalScore =
+                match.score;
+
+        }
+
+    }
+
+
+    if(bestLocalMatch){
+
+        try{
+
+            const response =
+                await fetch(
+                    "https://api.scryfall.com/cards/named?exact=" +
+                    encodeURIComponent(
+                        bestLocalMatch.name
+                    )
+                );
+
+
+            if(
+                thisSearchID !== searchID
+            ){
+
+                return;
+
+            }
+
+
+            if(response.ok){
+
+                const data =
+                    await response.json();
+
+
+                foundMethod =
+                    "Local Fuzzy";
+
+
+                showCard(
+                    data,
+                    bestLocalMatch.name,
+                    thisSearchID
+                );
+
+
+                return;
+
+            }
+
+        }
+        catch(error){
+
+            console.error(error);
+
+        }
+
+    }
+
+
+    /* =====================================================
+       STEP 4 - PHONETIC MATCH
+    ===================================================== */
+
+    result.textContent =
+        (
+            lastHeardText
+                ? "Heard: " + lastHeardText
+                : "Typed: " + candidates[0]
+        ) +
+        "\nTrying Phonetic Match...";
+
+
+    const phoneticMatch =
+        await findPhoneticCard(
+            candidates
+        );
+
+
+    if(
+        thisSearchID !== searchID
+    ){
+
+        return;
+
+    }
+
+
+    if(phoneticMatch){
+
+        try{
+
+            const response =
+                await fetch(
+                    "https://api.scryfall.com/cards/named?exact=" +
+                    encodeURIComponent(
+                        phoneticMatch.name
+                    )
+                );
+
+
+            if(
+                thisSearchID !== searchID
+            ){
+
+                return;
+
+            }
+
+
+            if(response.ok){
+
+                const data =
+                    await response.json();
+
+
+                foundMethod =
+                    "Phonetic Match";
+
+
+                showCard(
+                    data,
+                    phoneticMatch.name,
+                    thisSearchID
+                );
+
+
+                return;
+
+            }
+
+        }
+        catch(error){
+
+            console.error(error);
+
+        }
+
+    }
+
+
+    /* =====================================================
+       NOTHING FOUND
+    ===================================================== */
+
+    if(
+        thisSearchID !== searchID
+    ){
+
+        return;
+
+    }
+
+
+    if(lastHeardText){
+
+        result.textContent =
+            "Heard: " +
+            lastHeardText +
+            "\nCard not found.";
+
+    }
+    else{
+
+        result.textContent =
+            "Typed: " +
+            candidates[0] +
+            "\nCard not found.";
+
+    }
+
+
+    button.disabled =
+        false;
+
+}
+
+
+/* =========================================================
+   SHOW CARD
+========================================================= */
+
+function showCard(
+    data,
+    matchedName,
+    thisSearchID
+){
+
+    /*
+       Never display an old result after Stop.
+    */
+
+    if(
+        thisSearchID !== searchID
+    ){
+
+        return;
+
+    }
+
+
+    const prefix =
+        lastHeardText
+            ? "Heard: " + lastHeardText
+            : "Typed: " + matchedName;
+
+
+    result.textContent =
+        prefix +
+        "\nFound by: " +
+        foundMethod +
+        "\nMatched: " +
+        matchedName;
+
+
+    let imageURL =
+        null;
+
+
+    /*
+       Normal single-faced card.
+    */
+
+    if(
+        data.image_uris &&
+        data.image_uris.normal
+    ){
+
+        imageURL =
+            data.image_uris.normal;
+
+    }
+
+
+    /*
+       Double-faced card.
+    */
+
+    else if(
+        data.card_faces &&
+        data.card_faces[0] &&
+        data.card_faces[0].image_uris
+    ){
+
+        imageURL =
+            data.card_faces[0]
+                .image_uris
+                .normal;
+
+    }
+
+
+    if(imageURL){
+
+        cardImage.src =
+            imageURL;
+
+        cardImage.style.display =
+            "block";
+
+    }
+    else{
+
+        result.textContent =
+            prefix +
+            "\nFound by: " +
+            foundMethod +
+            "\nMatched: " +
+            matchedName +
+            "\n(no image available)";
+
+    }
+
+
+    button.disabled =
+        false;
+
+}
