@@ -3,8 +3,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
 <title>MTG Voice Card</title>
 
@@ -59,15 +58,6 @@ button:disabled{
     min-height:70px;
 }
 
-#card{
-    display:none;
-}
-
-
-/* =========================================================
-   NORMAL INTERFACE
-========================================================= */
-
 #manual{
     width:90%;
     max-width:500px;
@@ -118,13 +108,15 @@ button:disabled{
 
 
 /* =========================================================
-   FULLSCREEN CARD VIEW
+   FULLSCREEN CARD OVERLAY
 ========================================================= */
 
 #cardView{
+
     display:none;
 
     position:fixed;
+
     inset:0;
 
     width:100vw;
@@ -151,13 +143,14 @@ button:disabled{
 
 
 /*
-   The actual card image.
+   Card is allowed to use the complete
+   available screen.
 
-   It can never become larger than the available
-   screen in either direction.
+   It will never be cropped.
 */
 
 #fullscreenCard{
+
     display:block;
 
     max-width:100%;
@@ -168,26 +161,17 @@ button:disabled{
 
     object-fit:contain;
 
-    border-radius:0;
-
     margin:0;
+
 }
 
 
 /*
-   Fullscreen card mode.
+   Prevent the page behind the card from scrolling.
 */
 
 body.cardMode{
     overflow:hidden;
-}
-
-body.cardMode > *:not(#cardView){
-    display:none !important;
-}
-
-body.cardMode #cardView{
-    display:flex !important;
 }
 
 </style>
@@ -197,7 +181,7 @@ body.cardMode #cardView{
 <body>
 
 <!-- =======================================================
-     NORMAL INTERFACE
+     MAIN INTERFACE
 ======================================================= -->
 
 <div id="mainInterface">
@@ -220,6 +204,10 @@ body.cardMode #cardView{
     Tap the button and say a Magic card name.
 </div>
 
+
+<!-- ===================================================
+     CARD SEARCH
+=================================================== -->
 
 <div id="manual">
 
@@ -402,18 +390,14 @@ else{
     recognition =
         new SpeechRecognition();
 
-
     recognition.lang =
         "en-US";
-
 
     recognition.continuous =
         false;
 
-
     recognition.interimResults =
         false;
-
 
     recognition.maxAlternatives =
         5;
@@ -506,7 +490,6 @@ else{
 
             clearTimeout(timeout);
 
-
             button.disabled = false;
 
 
@@ -532,7 +515,6 @@ else{
         function(){
 
             clearTimeout(timeout);
-
 
             button.disabled = false;
 
@@ -561,24 +543,25 @@ function startListening(){
     }
 
 
+    /*
+       Close fullscreen card if one is shown.
+       This does NOT reload the page and does NOT
+       request microphone permission again.
+    */
+
+    closeCardView();
+
+
     clearTimeout(timeout);
 
 
     /*
        Improvement 5:
-       Clear card search field when
-       a new card search starts.
+       Clear the card search field when a new
+       card search starts.
     */
 
     manualInput.value = "";
-
-
-    /*
-       If a fullscreen card is currently shown,
-       return to the normal interface.
-    */
-
-    closeCardView();
 
 
     searchCancelled = true;
@@ -617,8 +600,7 @@ function startListening(){
 
 
     /*
-       Speech recognition lasts a maximum
-       of approximately 3 seconds.
+       Listening lasts a maximum of 3 seconds.
     */
 
     timeout =
@@ -1471,8 +1453,7 @@ function showCard(
 
 
     /*
-       Safety check:
-       only English cards.
+       Only English cards.
     */
 
     if(data.lang !== "en"){
@@ -1526,22 +1507,21 @@ function showCard(
 
     /*
        Improvement 6:
-       Show card in fullscreen mode.
-
-       The normal interface, buttons and
-       search information disappear.
+       Put only the card into a fullscreen overlay.
+       The normal page itself is NOT hidden.
     */
 
     fullscreenCard.src =
         imageURL;
 
 
+    cardView.style.display =
+        "flex";
+
+
     document.body.classList.add(
         "cardMode"
     );
-
-
-    button.disabled = false;
 
 }
 
@@ -1552,16 +1532,39 @@ function showCard(
 
 function closeCardView(){
 
+    cardView.style.display =
+        "none";
+
+
     document.body.classList.remove(
         "cardMode"
     );
 
+
+    /*
+       Remove the image source so the next card
+       starts cleanly.
+    */
 
     fullscreenCard.removeAttribute(
         "src"
     );
 
 }
+
+
+/* =========================================================
+   TAP CARD TO RETURN
+========================================================= */
+
+cardView.addEventListener(
+    "click",
+    function(){
+
+        closeCardView();
+
+    }
+);
 
 
 /* =========================================================
@@ -1603,8 +1606,7 @@ function manualSearch(){
 
     /*
        Improvement 5:
-       Clear the card search field
-       when the search starts.
+       Clear the card input immediately.
     */
 
     manualInput.value = "";
@@ -2039,8 +2041,7 @@ async function searchKeyword(){
 
     /*
        Improvement 5:
-       Clear keyword field immediately
-       when a new keyword search starts.
+       Clear keyword input immediately.
     */
 
     keywordInput.value = "";
@@ -2151,11 +2152,6 @@ async function searchKeyword(){
 
     }
 
-
-    /*
-       Improvement 4:
-       Scroll directly to the explanation.
-    */
 
     keywordResult.scrollIntoView({
 
