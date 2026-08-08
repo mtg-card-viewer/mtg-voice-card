@@ -1311,4 +1311,428 @@ async function findBestCard(
                 );
 
 
-                return
+                return;
+
+            }
+
+        }
+        catch(error){
+
+            console.error(error);
+
+        }
+
+    }
+
+
+    /* =====================================================
+       STEP 2 - SCRYFALL FUZZY
+    ===================================================== */
+
+    for(
+        const candidate of candidates
+    ){
+
+        if(thisSearchID !== searchID){
+
+            return;
+
+        }
+
+
+        try{
+
+            const response =
+                await fetch(
+                    "https://api.scryfall.com/cards/named?fuzzy=" +
+                    encodeURIComponent(
+                        candidate
+                    )
+                );
+
+
+            if(
+                thisSearchID !== searchID
+            ){
+
+                return;
+
+            }
+
+
+            if(response.ok){
+
+                const data =
+                    await response.json();
+
+
+                if(
+                    thisSearchID !== searchID
+                ){
+
+                    return;
+
+                }
+
+
+                foundMethod =
+                    "Scryfall Fuzzy";
+
+
+                showCard(
+                    data,
+                    data.name,
+                    thisSearchID
+                );
+
+
+                return;
+
+            }
+
+        }
+        catch(error){
+
+            console.error(error);
+
+        }
+
+    }
+
+
+    /* =====================================================
+       STEP 3 - LOCAL FUZZY
+    ===================================================== */
+
+    result.textContent =
+        (
+            lastHeardText
+                ? "Heard: " + lastHeardText
+                : "Typed: " + candidates[0]
+        ) +
+        "\nTrying Local Fuzzy...";
+
+
+    let bestLocalMatch =
+        null;
+
+    let bestLocalScore =
+        0;
+
+
+    for(
+        const candidate of candidates
+    ){
+
+        if(
+            thisSearchID !== searchID
+        ){
+
+            return;
+
+        }
+
+
+        const match =
+            await findClosestCard(
+                candidate
+            );
+
+
+        if(
+            thisSearchID !== searchID
+        ){
+
+            return;
+
+        }
+
+
+        if(
+            match &&
+            match.score >
+            bestLocalScore
+        ){
+
+            bestLocalMatch =
+                match;
+
+            bestLocalScore =
+                match.score;
+
+        }
+
+    }
+
+
+    if(bestLocalMatch){
+
+        try{
+
+            const response =
+                await fetch(
+                    "https://api.scryfall.com/cards/named?exact=" +
+                    encodeURIComponent(
+                        bestLocalMatch.name
+                    )
+                );
+
+
+            if(
+                thisSearchID !== searchID
+            ){
+
+                return;
+
+            }
+
+
+            if(response.ok){
+
+                const data =
+                    await response.json();
+
+
+                foundMethod =
+                    "Local Fuzzy";
+
+
+                showCard(
+                    data,
+                    bestLocalMatch.name,
+                    thisSearchID
+                );
+
+
+                return;
+
+            }
+
+        }
+        catch(error){
+
+            console.error(error);
+
+        }
+
+    }
+
+
+    /* =====================================================
+       STEP 4 - PHONETIC MATCH
+    ===================================================== */
+
+    result.textContent =
+        (
+            lastHeardText
+                ? "Heard: " + lastHeardText
+                : "Typed: " + candidates[0]
+        ) +
+        "\nTrying Phonetic Match...";
+
+
+    const phoneticMatch =
+        await findPhoneticCard(
+            candidates
+        );
+
+
+    if(
+        thisSearchID !== searchID
+    ){
+
+        return;
+
+    }
+
+
+    if(phoneticMatch){
+
+        try{
+
+            const response =
+                await fetch(
+                    "https://api.scryfall.com/cards/named?exact=" +
+                    encodeURIComponent(
+                        phoneticMatch.name
+                    )
+                );
+
+
+            if(
+                thisSearchID !== searchID
+            ){
+
+                return;
+
+            }
+
+
+            if(response.ok){
+
+                const data =
+                    await response.json();
+
+
+                foundMethod =
+                    "Phonetic Match";
+
+
+                showCard(
+                    data,
+                    phoneticMatch.name,
+                    thisSearchID
+                );
+
+
+                return;
+
+            }
+
+        }
+        catch(error){
+
+            console.error(error);
+
+        }
+
+    }
+
+
+    /* =====================================================
+       NOTHING FOUND
+    ===================================================== */
+
+    if(
+        thisSearchID !== searchID
+    ){
+
+        return;
+
+    }
+
+
+    if(lastHeardText){
+
+        result.textContent =
+            "Heard: " +
+            lastHeardText +
+            "\nCard not found.";
+
+    }
+    else{
+
+        result.textContent =
+            "Typed: " +
+            candidates[0] +
+            "\nCard not found.";
+
+    }
+
+
+    button.disabled =
+        false;
+
+}
+
+
+/* =========================================================
+   SHOW CARD
+========================================================= */
+
+function showCard(
+    data,
+    matchedName,
+    thisSearchID
+){
+
+    /*
+       Never display an old result after Stop.
+    */
+
+    if(
+        thisSearchID !== searchID
+    ){
+
+        return;
+
+    }
+
+
+    const prefix =
+        lastHeardText
+            ? "Heard: " + lastHeardText
+            : "Typed: " + matchedName;
+
+
+    result.textContent =
+        prefix +
+        "\nFound by: " +
+        foundMethod +
+        "\nMatched: " +
+        matchedName;
+
+
+    let imageURL =
+        null;
+
+
+    /*
+       Normal single-faced card.
+    */
+
+    if(
+        data.image_uris &&
+        data.image_uris.normal
+    ){
+
+        imageURL =
+            data.image_uris.normal;
+
+    }
+
+
+    /*
+       Double-faced card.
+    */
+
+    else if(
+        data.card_faces &&
+        data.card_faces[0] &&
+        data.card_faces[0].image_uris
+    ){
+
+        imageURL =
+            data.card_faces[0]
+                .image_uris
+                .normal;
+
+    }
+
+
+    if(imageURL){
+
+        cardImage.src =
+            imageURL;
+
+        cardImage.style.display =
+            "block";
+
+    }
+    else{
+
+        result.textContent =
+            prefix +
+            "\nFound by: " +
+            foundMethod +
+            "\nMatched: " +
+            matchedName +
+            "\n(no image available)";
+
+    }
+
+
+    button.disabled =
+        false;
+
+}
