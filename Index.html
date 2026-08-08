@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MTG Voice Card</title>
+
+    <style>
+        body {
+            margin: 0;
+            background: #111;
+            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+
+        button {
+            font-size: 24px;
+            padding: 20px 30px;
+            border-radius: 15px;
+            border: none;
+            cursor: pointer;
+        }
+
+        #result {
+            margin-top: 30px;
+            font-size: 22px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <button id="listenButton">🎤 Spreek kaartnaam</button>
+
+    <div id="result">
+        Tik op de knop en spreek een Magic-kaart uit.
+    </div>
+
+<script>
+
+    const button = document.getElementById("listenButton");
+    const result = document.getElementById("result");
+
+    const SpeechRecognition =
+        window.SpeechRecognition ||
+        window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+
+        result.textContent =
+            "Spraakherkenning wordt niet ondersteund door deze browser.";
+
+    } else {
+
+        const recognition = new SpeechRecognition();
+
+        recognition.lang = "en-US";
+        recognition.continuous = false;
+        recognition.interimResults = false;
+
+        button.addEventListener("click", () => {
+
+            result.textContent = "🎤 Luisteren...";
+
+            recognition.start();
+
+        });
+
+        recognition.onresult = (event) => {
+
+            const spokenText =
+                event.results[0][0].transcript;
+
+            result.textContent =
+                "Je zei: " + spokenText;
+
+        };
+
+        recognition.onerror = (event) => {
+
+            result.textContent =
+                "Fout bij spraakherkenning: " + event.error;
+
+        };
+
+        recognition.onend = () => {
+
+            button.textContent = "🎤 Spreek kaartnaam";
+
+        };
+    }
+
+</script>
+
+</body>
+</html>
