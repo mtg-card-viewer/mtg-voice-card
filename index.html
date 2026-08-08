@@ -11,7 +11,7 @@
             background: #111;
             color: white;
             font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-            height: 100vh;
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -28,10 +28,22 @@
             color: black;
         }
 
+        button:disabled {
+            opacity: 0.5;
+        }
+
         #result {
             margin-top: 30px;
             font-size: 22px;
             max-width: 90%;
+        }
+
+        #card {
+            display: none;
+            max-width: 90%;
+            max-height: 65vh;
+            margin-top: 25px;
+            border-radius: 12px;
         }
     </style>
 </head>
@@ -44,10 +56,13 @@
         Tap the button and say a Magic card name.
     </div>
 
+    <img id="card" alt="Magic card">
+
 <script>
 
 const button = document.getElementById("listenButton");
 const result = document.getElementById("result");
+const cardImage = document.getElementById("card");
 
 const SpeechRecognition =
     window.SpeechRecognition ||
@@ -74,6 +89,7 @@ if (!SpeechRecognition) {
         clearTimeout(timeout);
 
         result.textContent = "🎤 Listening...";
+        cardImage.style.display = "none";
         button.disabled = true;
 
         try {
@@ -82,14 +98,13 @@ if (!SpeechRecognition) {
             console.log(e);
         }
 
-        // Stop listening after 7 seconds
         timeout = setTimeout(() => {
             recognition.stop();
         }, 7000);
 
     });
 
-    recognition.onresult = (event) => {
+    recognition.onresult = async (event) => {
 
         clearTimeout(timeout);
 
@@ -97,9 +112,11 @@ if (!SpeechRecognition) {
             event.results[0][0].transcript.trim();
 
         result.textContent =
-            "You said: " + spokenText;
+            "Searching for: " + spokenText;
 
         recognition.stop();
+
+        await findCard(spokenText);
     };
 
     recognition.onerror = (event) => {
@@ -117,9 +134,57 @@ if (!SpeechRecognition) {
         clearTimeout(timeout);
 
         button.disabled = false;
-
     };
+}
 
+
+/*
+    Search Scryfall for the spoken card name
+*/
+
+async function findCard(cardName) {
+
+    try {
+
+        const url =
+            "https://api.scryfall.com/cards/named?exact=" +
+            encodeURIComponent(cardName);
+
+        const response = await fetch(url);
+
+        if (!response.ok) {
+
+            result.textContent =
+                "Card not found: " + cardName;
+
+            return;
+        }
+
+        const data = await response.json();
+
+        result.textContent =
+            data.name;
+
+        if (data.image_uris && data.image_uris.normal) {
+
+            cardImage.src = data.image_uris.normal;
+            cardImage.style.display = "block";
+
+        } else {
+
+            result.textContent =
+                "Card found, but no image is available.";
+
+        }
+
+    } catch (error) {
+
+        console.error(error);
+
+        result.textContent =
+            "Could not connect to Scryfall.";
+
+    }
 }
 
 </script>
