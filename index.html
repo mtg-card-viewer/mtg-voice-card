@@ -80,7 +80,9 @@ if (!SpeechRecognition) {
     recognition.lang = "en-US";
     recognition.continuous = false;
     recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
+
+    // Ask Safari for multiple interpretations
+    recognition.maxAlternatives = 5;
 
     let timeout;
 
@@ -104,20 +106,34 @@ if (!SpeechRecognition) {
 
     });
 
+
     recognition.onresult = async (event) => {
 
         clearTimeout(timeout);
 
-        const spokenText =
-            event.results[0][0].transcript.trim();
-
-        result.textContent =
-            "Searching for: " + spokenText;
-
         recognition.stop();
 
-        await findCard(spokenText);
+        const alternatives = [];
+
+        for (
+            let i = 0;
+            i < event.results[0].length;
+            i++
+        ) {
+
+            alternatives.push(
+                event.results[0][i].transcript.trim()
+            );
+
+        }
+
+        console.log("Speech alternatives:", alternatives);
+
+        result.textContent = "Searching...";
+
+        await findBestCard(alternatives);
     };
+
 
     recognition.onerror = (event) => {
 
@@ -129,6 +145,7 @@ if (!SpeechRecognition) {
         button.disabled = false;
     };
 
+
     recognition.onend = () => {
 
         clearTimeout(timeout);
@@ -139,52 +156,129 @@ if (!SpeechRecognition) {
 
 
 /*
-    Search Scryfall for the spoken card name
+    Try every speech interpretation.
+    The first exact Scryfall match wins.
 */
 
-async function findCard(cardName) {
+async function findBestCard(candidates) {
 
-    try {
+    // Remove duplicate interpretations
+    candidates = [...new Set(candidates)];
 
-        const url =
-            "https://api.scryfall.com/cards/named?exact=" +
-            encodeURIComponent(cardName);
+    for (const candidate of candidates) {
 
-        const response = await fetch(url);
+        try {
 
-        if (!response.ok) {
+            const url =
+                "https://api.scryfall.com/cards/named?exact=" +
+                encodeURIComponent(candidate);
 
-            result.textContent =
-                "Card not found: " + cardName;
+            const response = await fetch(url);
 
-            return;
+            if (response.ok) {
+
+                const data = await response.json();
+
+                showCard(data);
+
+                return;
+            }
+
+        } catch (error) {
+
+            console.error(error);
         }
+    }
 
-        const data = await response.json();
 
-        result.textContent =
-            data.name;
+    /*
+        No exact match was found.
+        Now try Scryfall's normal search.
+    */
 
-        if (data.image_uris && data.image_uris.normal) {
+    for (const candidate of candidates) {
 
-            cardImage.src = data.image_uris.normal;
-            cardImage.style.display = "block";
+        try {
 
-        } else {
+            const url =
+                "https://api.scryfall.com/cards/search?q=" +
+                encodeURIComponent(candidate);
 
-            result.textContent =
-                "Card found, but no image is available.";
+            const response = await fetch(url);
 
+            if (!response.ok) {
+                continue;
+            }
+
+            const data = await response.json();
+
+            if (data.data && data.data.length > 0) {
+
+                showCard(data.data[0]);
+
+                return;
+            }
+
+        } catch (error) {
+
+            console.error(error);
         }
+    }
 
-    } catch (error) {
 
-        console.error(error);
+    result.textContent =
+        "Card not found.";
 
-        result.textContent =
-            "Could not connect to Scryfall.";
+    button.disabled = false;
+}
+
+
+/*
+    Display the card
+*/
+
+function showCard(data) {
+
+    result.textContent = data.name;
+
+    let imageURL = null;
+
+
+    // Normal single-faced card
+    if (
+        data.image_uris &&
+        data.image_uris.normal
+    ) {
+
+        imageURL = data.image_uris.normal;
 
     }
+
+
+    // Double-faced card
+    else if (
+        data.card_faces &&
+        data.card_faces[0].image_uris
+    ) {
+
+        imageURL =
+            data.card_faces[0].image_uris.normal;
+    }
+
+
+    if (imageURL) {
+
+        cardImage.src = imageURL;
+        cardImage.style.display = "block";
+
+    } else {
+
+        result.textContent =
+            data.name +
+            " (no image available)";
+    }
+
+    button.disabled = false;
 }
 
 </script>
