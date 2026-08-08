@@ -3,1663 +3,1058 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <title>MTG Voice Card</title>
 
 <style>
-
 body{
-    margin:0;
-    background:#111;
-    color:white;
-    font-family:-apple-system,BlinkMacSystemFont,sans-serif;
-
-    min-height:100vh;
-
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    justify-content:center;
-
-    text-align:center;
+    margin:0;
+    background:#111;
+    color:white;
+    font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
 }
 
 button{
-    font-size:22px;
-    padding:16px 24px;
-    border-radius:15px;
-    border:none;
-
-    background:white;
-    color:black;
-
-    margin:5px;
+    font-size:22px;
+    padding:16px 24px;
+    border-radius:15px;
+    border:none;
+    background:white;
+    color:black;
+    margin:5px;
 }
 
 button:disabled{
-    opacity:.5;
+    opacity:.5;
 }
 
 #stopButton{
-    background:#d33;
-    color:white;
+    background:#d33;
+    color:white;
 }
 
 #result{
-    margin-top:20px;
-    font-size:20px;
-
-    max-width:90%;
-
-    white-space:pre-line;
-
-    min-height:70px;
+    margin-top:20px;
+    font-size:20px;
+    max-width:90%;
+    white-space:pre-line;
+    min-height:70px;
 }
 
 #card{
-    display:none;
-
-    max-width:90%;
-    max-height:65vh;
-
-    margin-top:20px;
-
-    border-radius:12px;
+    display:none;
+    max-width:90%;
+    max-height:65vh;
+    margin-top:20px;
+    border-radius:12px;
 }
 
 #manual{
-    width:90%;
-    max-width:500px;
-
-    margin-top:30px;
-
-    display:flex;
-    flex-direction:column;
-    align-items:center;
+    width:90%;
+    max-width:500px;
+    margin-top:30px;
 }
 
 #manualInput{
-    box-sizing:border-box;
-
-    width:100%;
-
-    font-size:20px;
-
-    padding:14px;
-
-    border-radius:10px;
-
-    border:none;
-
-    text-align:center;
+    box-sizing:border-box;
+    width:100%;
+    font-size:20px;
+    padding:14px;
+    border-radius:10px;
+    border:none;
+    text-align:center;
 }
 
 #manualButton{
-    margin-top:10px;
+    margin-top:10px;
 }
-
 </style>
 </head>
 
-
 <body>
 
-
-<!-- =====================================================
-     CONTROLS
-===================================================== -->
-
 <div>
-
-    <button id="listenButton">
-        🎤 Speak card name
-    </button>
-
-    <button id="stopButton" disabled>
-        ⏹ Stop
-    </button>
-
+    <button id="listenButton">🎤 Speak card name</button>
+    <button id="stopButton" disabled>⏹ Stop</button>
 </div>
-
-
-<!-- =====================================================
-     RESULT
-===================================================== -->
 
 <div id="result">
-
-    Tap the button and say a Magic card name.
-
+    Tap the button and say a Magic card name.
 </div>
 
-
-<!-- =====================================================
-     CARD
-===================================================== -->
-
-<img
-    id="card"
-    alt="Magic card"
->
-
-
-<!-- =====================================================
-     MANUAL SEARCH
-===================================================== -->
+<img id="card" alt="Magic card">
 
 <div id="manual">
 
-    <input
-        id="manualInput"
-        type="text"
-        placeholder="Type difficult card name..."
-        autocomplete="off"
-        autocorrect="off"
-        autocapitalize="off"
-        spellcheck="false"
-    >
+    <input
+        id="manualInput"
+        type="text"
+        placeholder="Type difficult card name..."
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+    >
 
-    <button id="manualButton">
-        🔎 Search card
-    </button>
+    <button id="manualButton">
+        🔎 Search card
+    </button>
 
 </div>
 
 
 <script>
 
-
-/* =========================================================
-   ELEMENTS
-========================================================= */
-
 const button =
-    document.getElementById(
-        "listenButton"
-    );
+    document.getElementById("listenButton");
 
 const stopButton =
-    document.getElementById(
-        "stopButton"
-    );
+    document.getElementById("stopButton");
 
 const result =
-    document.getElementById(
-        "result"
-    );
+    document.getElementById("result");
 
 const cardImage =
-    document.getElementById(
-        "card"
-    );
+    document.getElementById("card");
 
 const manualInput =
-    document.getElementById(
-        "manualInput"
-    );
+    document.getElementById("manualInput");
 
 const manualButton =
-    document.getElementById(
-        "manualButton"
-    );
+    document.getElementById("manualButton");
 
-
-/* =========================================================
-   VARIABLES
-========================================================= */
-
-let recognition = null;
-
-let timeout = null;
 
 let lastHeardText = "";
-
 let cardNamesCache = null;
-
-/*
-   Current search controller.
-
-   AbortController allows us to cancel
-   network requests.
-*/
-
-let searchController = null;
-
-/*
-   Every search gets an ID.
-
-   This prevents old searches from
-   displaying results after Stop.
-*/
-
-let searchID = 0;
+let recognition = null;
+let timeout = null;
+let searchCancelled = false;
 
 
 /* =========================================================
-   SPEECH RECOGNITION
+   SPEECH RECOGNITION
 ========================================================= */
 
 const SpeechRecognition =
-    window.SpeechRecognition ||
-    window.webkitSpeechRecognition;
+    window.SpeechRecognition ||
+    window.webkitSpeechRecognition;
 
 
 if(!SpeechRecognition){
 
-    result.textContent =
-        "Speech recognition is not supported.";
+    result.textContent =
+        "Speech recognition is not supported.";
 
 }
 else{
 
-    recognition =
-        new SpeechRecognition();
+    recognition =
+        new SpeechRecognition();
 
-    recognition.lang =
-        "en-US";
+    recognition.lang =
+        "en-US";
 
-    recognition.continuous =
-        false;
+    recognition.continuous =
+        false;
 
-    recognition.interimResults =
-        false;
+    recognition.interimResults =
+        false;
 
-    recognition.maxAlternatives =
-        5;
-
-
-    /* =====================================================
-       START BUTTON
-    ===================================================== */
-
-    button.addEventListener(
-        "click",
-        startListening
-    );
+    recognition.maxAlternatives =
+        5;
 
 
-    /* =====================================================
-       STOP BUTTON
-    ===================================================== */
+    /* START */
 
-    stopButton.addEventListener(
-        "click",
-        stopEverything
-    );
+    button.addEventListener(
+        "click",
+        startListening
+    );
 
 
-    /* =====================================================
-       SPEECH RESULT
-    ===================================================== */
+    /* STOP */
 
-    recognition.onresult =
-        async function(event){
-
-            clearTimeout(timeout);
+    stopButton.addEventListener(
+        "click",
+        stopListening
+    );
 
 
-            const candidates = [];
+    /* RESULT */
+
+    recognition.onresult =
+        async function(event){
+
+            clearTimeout(timeout);
+
+            const candidates = [];
+
+            for(
+                let i=0;
+                i<event.results[0].length;
+                i++
+            ){
+
+                const transcript =
+                    event.results[0][i]
+                    .transcript
+                    .trim();
+
+                if(transcript){
+
+                    candidates.push(
+                        transcript
+                    );
+                }
+            }
 
 
-            for(
-                let i = 0;
-                i < event.results[0].length;
-                i++
-            ){
+            if(candidates.length){
 
-                const transcript =
-                    event.results[0][i]
-                    .transcript
-                    .trim();
+                lastHeardText =
+                    candidates[0];
+
+            }
 
 
-                if(transcript){
-
-                    candidates.push(
-                        transcript
-                    );
-
-                }
-
-            }
+            result.textContent =
+                "Heard: " +
+                lastHeardText +
+                "\nSearching...";
 
 
-            if(candidates.length){
-
-                lastHeardText =
-                    candidates[0];
-
-            }
+            try{
+                recognition.stop();
+            }
+            catch(e){}
 
 
-            try{
-
-                recognition.stop();
-
-            }
-            catch(e){}
+            button.disabled = false;
+            stopButton.disabled = true;
 
 
-            /*
-               Start a new search.
-            */
+            searchCancelled = false;
 
-            startSearch();
+            await findBestCard(
+                candidates
+            );
 
-
-            result.textContent =
-                "Heard: " +
-                lastHeardText +
-                "\nSearching...";
+        };
 
 
-            await findBestCard(
-                candidates,
-                searchID,
-                searchController.signal
-            );
+    /* ERROR */
 
-        };
+    recognition.onerror =
+        function(event){
 
+            clearTimeout(timeout);
 
-    /* =====================================================
-       SPEECH ERROR
-    ===================================================== */
+            button.disabled = false;
+            stopButton.disabled = true;
 
-    recognition.onerror =
-        function(event){
+            if(event.error !== "aborted"){
 
-            clearTimeout(timeout);
+                result.textContent =
+                    "Speech error: " +
+                    event.error;
 
-            button.disabled =
-                false;
+            }
 
-            stopButton.disabled =
-                true;
+        };
 
 
-            if(
-                event.error !== "aborted"
-            ){
+    /* END */
 
-                result.textContent =
-                    "Speech error: " +
-                    event.error;
+    recognition.onend =
+        function(){
 
-            }
+            clearTimeout(timeout);
 
-        };
+            button.disabled = false;
+            stopButton.disabled = true;
 
-
-    /* =====================================================
-       SPEECH END
-    ===================================================== */
-
-    recognition.onend =
-        function(){
-
-            clearTimeout(timeout);
-
-            button.disabled =
-                false;
-
-        };
+        };
 
 }
 
 
 /* =========================================================
-   START LISTENING
+   START LISTENING
 ========================================================= */
 
 function startListening(){
 
-    /*
-       Cancel any previous search.
-    */
+    if(!recognition){
+        return;
+    }
 
-    cancelSearch();
+    clearTimeout(timeout);
 
+    searchCancelled = true;
 
-    clearTimeout(timeout);
+    lastHeardText = "";
 
+    cardImage.style.display =
+        "none";
 
-    lastHeardText = "";
+    result.textContent =
+        "🎤 Listening...";
 
+    button.disabled = true;
+    stopButton.disabled = false;
 
-    cardImage.style.display =
-        "none";
+    searchCancelled = false;
 
+    try{
 
-    result.textContent =
-        "🎤 Listening...";
+        recognition.start();
 
+    }
+    catch(error){
 
-    button.disabled =
-        true;
+        console.log(error);
 
-    stopButton.disabled =
-        false;
+        button.disabled = false;
+        stopButton.disabled = true;
 
-
-    try{
-
-        recognition.start();
-
-    }
-    catch(error){
-
-        console.log(error);
-
-        button.disabled =
-            false;
-
-        stopButton.disabled =
-            true;
-
-    }
+    }
 
 
-    /*
-       Maximum listening time:
-       3 seconds.
-    */
+    timeout =
+        setTimeout(
+            function(){
 
-    timeout =
-        setTimeout(
-            function(){
+                try{
+                    recognition.stop();
+                }
+                catch(e){}
 
-                try{
-
-                    recognition.stop();
-
-                }
-                catch(e){}
-
-            },
-            3000
-        );
-
+            },
+            3000
+        );
 }
 
 
 /* =========================================================
-   START SEARCH
+   STOP
 ========================================================= */
 
-function startSearch(){
+function stopListening(){
 
-    /*
-       Cancel previous search.
-    */
+    clearTimeout(timeout);
 
-    cancelSearch();
+    searchCancelled = true;
 
+    try{
+        recognition.abort();
+    }
+    catch(e){
 
-    searchID++;
+        try{
+            recognition.stop();
+        }
+        catch(error){}
 
+    }
 
-    searchController =
-        new AbortController();
+    button.disabled = false;
+    stopButton.disabled = true;
 
-
-    stopButton.disabled =
-        false;
-
-}
-
-
-/* =========================================================
-   CANCEL SEARCH
-========================================================= */
-
-function cancelSearch(){
-
-    /*
-       Abort network request.
-    */
-
-    if(searchController){
-
-        try{
-
-            searchController.abort();
-
-        }
-        catch(e){}
-
-    }
-
-
-    searchController =
-        null;
+    result.textContent =
+        "⏹ Stopped.";
 
 }
 
 
 /* =========================================================
-   STOP EVERYTHING
-========================================================= */
-
-function stopEverything(){
-
-    clearTimeout(timeout);
-
-
-    /*
-       Invalidate every current search.
-    */
-
-    searchID++;
-
-
-    /*
-       Abort network requests.
-    */
-
-    cancelSearch();
-
-
-    /*
-       Stop speech recognition.
-    */
-
-    if(recognition){
-
-        try{
-
-            recognition.abort();
-
-        }
-        catch(e){
-
-            try{
-
-                recognition.stop();
-
-            }
-            catch(error){}
-
-        }
-
-    }
-
-
-    button.disabled =
-        false;
-
-    stopButton.disabled =
-        true;
-
-
-    result.textContent =
-        "⏹ Stopped.";
-
-}
-
-
-/* =========================================================
-   NORMALIZE TEXT
+   NORMALIZE
 ========================================================= */
 
 function normalizeText(text){
 
-    return text
-        .toLowerCase()
-        .replace(/['’]/g,"")
-        .replace(/[^a-z0-9\s]/g," ")
-        .replace(/\s+/g," ")
-        .trim();
+    return text
+        .toLowerCase()
+        .replace(/['’]/g,"")
+        .replace(/[^a-z0-9\s]/g," ")
+        .replace(/\s+/g," ")
+        .trim();
 
 }
 
 
 /* =========================================================
-   LEVENSHTEIN
+   LEVENSHTEIN
 ========================================================= */
 
 function levenshtein(a,b){
 
-    const matrix = [];
+    const matrix=[];
 
+    for(let i=0;i<=b.length;i++){
+        matrix[i]=[i];
+    }
 
-    for(
-        let i = 0;
-        i <= b.length;
-        i++
-    ){
+    for(let j=0;j<=a.length;j++){
+        matrix[0][j]=j;
+    }
 
-        matrix[i] = [i];
+    for(let i=1;i<=b.length;i++){
 
-    }
+        for(let j=1;j<=a.length;j++){
 
+            if(
+                b.charAt(i-1) ===
+                a.charAt(j-1)
+            ){
 
-    for(
-        let j = 0;
-        j <= a.length;
-        j++
-    ){
+                matrix[i][j] =
+                    matrix[i-1][j-1];
 
-        matrix[0][j] = j;
+            }
+            else{
 
-    }
+                matrix[i][j] =
+                    Math.min(
+                        matrix[i-1][j]+1,
+                        matrix[i][j-1]+1,
+                        matrix[i-1][j-1]+1
+                    );
 
+            }
+        }
+    }
 
-    for(
-        let i = 1;
-        i <= b.length;
-        i++
-    ){
-
-        for(
-            let j = 1;
-            j <= a.length;
-            j++
-        ){
-
-            if(
-                b.charAt(i-1) ===
-                a.charAt(j-1)
-            ){
-
-                matrix[i][j] =
-                    matrix[i-1][j-1];
-
-            }
-            else{
-
-                matrix[i][j] =
-                    Math.min(
-
-                        matrix[i-1][j] + 1,
-
-                        matrix[i][j-1] + 1,
-
-                        matrix[i-1][j-1] + 1
-
-                    );
-
-            }
-
-        }
-
-    }
-
-
-    return matrix[b.length][a.length];
-
+    return matrix[b.length][a.length];
 }
 
 
 /* =========================================================
-   SIMILARITY
+   SIMILARITY
 ========================================================= */
 
 function similarity(a,b){
 
-    a =
-        normalizeText(a);
+    a = normalizeText(a);
+    b = normalizeText(b);
 
-    b =
-        normalizeText(b);
+    if(!a || !b){
+        return 0;
+    }
 
+    if(a === b){
+        return 1;
+    }
 
-    if(!a || !b){
+    const distance =
+        levenshtein(a,b);
 
-        return 0;
+    const longest =
+        Math.max(a.length,b.length);
 
-    }
-
-
-    if(a === b){
-
-        return 1;
-
-    }
-
-
-    const distance =
-        levenshtein(a,b);
-
-
-    const longest =
-        Math.max(
-            a.length,
-            b.length
-        );
-
-
-    return 1 -
-        distance / longest;
-
+    return 1 -
+        distance / longest;
 }
 
 
 /* =========================================================
-   PHONETIC NORMALIZATION
+   CARD NAMES
+========================================================= */
+
+async function getCardNames(){
+
+    if(cardNamesCache){
+        return cardNamesCache;
+    }
+
+    try{
+
+        const response =
+            await fetch(
+                "https://api.scryfall.com/catalog/card-names"
+            );
+
+        if(!response.ok){
+            return null;
+        }
+
+        const data =
+            await response.json();
+
+        cardNamesCache =
+            data.data;
+
+        return cardNamesCache;
+
+    }
+    catch(error){
+
+        console.error(error);
+
+        return null;
+    }
+}
+
+
+/* =========================================================
+   LOCAL FUZZY
+========================================================= */
+
+async function findClosestCard(spoken){
+
+    const cardNames =
+        await getCardNames();
+
+    if(!cardNames){
+        return null;
+    }
+
+    let bestName = null;
+    let bestScore = 0;
+
+    for(
+        const cardName of cardNames
+    ){
+
+        if(searchCancelled){
+            return null;
+        }
+
+        const score =
+            similarity(
+                spoken,
+                cardName
+            );
+
+        if(score > bestScore){
+
+            bestScore = score;
+            bestName = cardName;
+
+        }
+    }
+
+    if(bestScore >= 0.82){
+
+        return {
+            name:bestName,
+            score:bestScore
+        };
+
+    }
+
+    return null;
+}
+
+
+/* =========================================================
+   PHONETIC NORMALIZATION
 ========================================================= */
 
 function phoneticNormalize(text){
 
-    let s =
-        normalizeText(text);
+    let s =
+        normalizeText(text);
 
+    s =
+        s
+        .replace(/ph/g,"f")
+        .replace(/th/g,"t")
+        .replace(/wh/g,"w")
+        .replace(/ck/g,"k")
+        .replace(/qu/g,"kw")
+        .replace(/c(?=[eiy])/g,"s")
+        .replace(/c/g,"k")
+        .replace(/q/g,"k")
+        .replace(/x/g,"ks")
+        .replace(/z/g,"s")
+        .replace(/j/g,"y")
+        .replace(/ae/g,"a")
+        .replace(/oe/g,"o")
+        .replace(/ee/g,"i")
+        .replace(/oo/g,"u")
+        .replace(/ou/g,"u");
 
-    s =
-        s
-        .replace(/ph/g,"f")
-        .replace(/th/g,"t")
-        .replace(/wh/g,"w")
-        .replace(/ck/g,"k")
-        .replace(/qu/g,"kw")
-        .replace(/c(?=[eiy])/g,"s")
-        .replace(/c/g,"k")
-        .replace(/q/g,"k")
-        .replace(/x/g,"ks")
-        .replace(/z/g,"s")
-        .replace(/j/g,"y")
-        .replace(/ae/g,"a")
-        .replace(/oe/g,"o")
-        .replace(/ee/g,"i")
-        .replace(/oo/g,"u")
-        .replace(/ou/g,"u");
+    s =
+        s.replace(
+            /(.)\1+/g,
+            "$1"
+        );
 
-
-    s =
-        s.replace(
-            /(.)\1+/g,
-            "$1"
-        );
-
-
-    return s;
-
+    return s;
 }
 
 
 /* =========================================================
-   PHONETIC SIMILARITY
+   PHONETIC SCORE
 ========================================================= */
 
 function phoneticSimilarity(a,b){
 
-    return similarity(
-        phoneticNormalize(a),
-        phoneticNormalize(b)
-    );
-
+    return similarity(
+        phoneticNormalize(a),
+        phoneticNormalize(b)
+    );
 }
 
 
 /* =========================================================
-   CARD NAMES
-========================================================= */
-
-async function getCardNames(
-    signal
-){
-
-    /*
-       Already downloaded?
-    */
-
-    if(cardNamesCache){
-
-        return cardNamesCache;
-
-    }
-
-
-    try{
-
-        const response =
-            await fetch(
-                "https://api.scryfall.com/catalog/card-names",
-                {
-                    signal:signal
-                }
-            );
-
-
-        if(signal.aborted){
-
-            return null;
-
-        }
-
-
-        if(!response.ok){
-
-            return null;
-
-        }
-
-
-        const data =
-            await response.json();
-
-
-        if(signal.aborted){
-
-            return null;
-
-        }
-
-
-        cardNamesCache =
-            data.data;
-
-
-        return cardNamesCache;
-
-    }
-    catch(error){
-
-        if(
-            error.name ===
-            "AbortError"
-        ){
-
-            return null;
-
-        }
-
-
-        console.error(
-            error
-        );
-
-
-        return null;
-
-    }
-
-}
-
-
-/* =========================================================
-   LOCAL FUZZY
-========================================================= */
-
-async function findClosestCard(
-    spoken,
-    signal
-){
-
-    const cardNames =
-        await getCardNames(
-            signal
-        );
-
-
-    if(
-        !cardNames ||
-        signal.aborted
-    ){
-
-        return null;
-
-    }
-
-
-    let bestName =
-        null;
-
-    let bestScore =
-        0;
-
-
-    for(
-        let i = 0;
-        i < cardNames.length;
-        i++
-    ){
-
-        /*
-           IMPORTANT:
-
-           Give the iPad a chance to
-           process the Stop button.
-
-        */
-
-        if(
-            signal.aborted
-        ){
-
-            return null;
-
-        }
-
-
-        const cardName =
-            cardNames[i];
-
-
-        const score =
-            similarity(
-                spoken,
-                cardName
-            );
-
-
-        if(score > bestScore){
-
-            bestScore =
-                score;
-
-            bestName =
-                cardName;
-
-        }
-
-
-        /*
-           Yield every 250 cards.
-        */
-
-        if(
-            i % 250 === 0
-        ){
-
-            await new Promise(
-                resolve =>
-                    setTimeout(
-                        resolve,
-                        0
-                    )
-            );
-
-        }
-
-    }
-
-
-    if(
-        bestScore >= 0.82
-    ){
-
-        return {
-
-            name:
-                bestName,
-
-            score:
-                bestScore
-
-        };
-
-    }
-
-
-    return null;
-
-}
-
-
-/* =========================================================
-   PHONETIC SEARCH
+   PHONETIC SEARCH
 ========================================================= */
 
 async function findPhoneticCard(
-    candidates,
-    signal
+    candidates
 ){
 
-    const cardNames =
-        await getCardNames(
-            signal
-        );
+    const cardNames =
+        await getCardNames();
 
+    if(!cardNames){
+        return null;
+    }
 
-    if(
-        !cardNames ||
-        signal.aborted
-    ){
+    let bestName = null;
+    let bestScore = 0;
 
-        return null;
+    for(
+        const candidate of candidates
+    ){
 
-    }
+        for(
+            const cardName of cardNames
+        ){
 
+            if(searchCancelled){
+                return null;
+            }
 
-    let bestName =
-        null;
+            const score =
+                phoneticSimilarity(
+                    candidate,
+                    cardName
+                );
 
-    let bestScore =
-        0;
+            if(score > bestScore){
 
+                bestScore = score;
+                bestName = cardName;
 
-    let counter =
-        0;
+            }
+        }
+    }
 
+    console.log(
+        "Phonetic:",
+        bestName,
+        bestScore
+    );
 
-    for(
-        const candidate of candidates
-    ){
+    if(bestScore >= 0.78){
 
-        for(
-            const cardName of cardNames
-        ){
+        return {
+            name:bestName,
+            score:bestScore
+        };
 
-            if(
-                signal.aborted
-            ){
+    }
 
-                return null;
-
-            }
-
-
-            const score =
-                phoneticSimilarity(
-                    candidate,
-                    cardName
-                );
-
-
-            if(score > bestScore){
-
-                bestScore =
-                    score;
-
-                bestName =
-                    cardName;
-
-            }
-
-
-            counter++;
-
-
-            /*
-               Yield regularly so the
-               Stop button remains responsive.
-            */
-
-            if(
-                counter % 250 === 0
-            ){
-
-                await new Promise(
-                    resolve =>
-                        setTimeout(
-                            resolve,
-                            0
-                        )
-                );
-
-            }
-
-        }
-
-    }
-
-
-    console.log(
-        "Best phonetic match:",
-        bestName,
-        bestScore
-    );
-
-
-    if(
-        bestScore >= 0.78
-    ){
-
-        return {
-
-            name:
-                bestName,
-
-            score:
-                bestScore
-
-        };
-
-    }
-
-
-    return null;
-
+    return null;
 }
 
 
 /* =========================================================
-   GET CARD FROM SCRYFALL
-========================================================= */
-
-async function getCard(
-    url,
-    signal
-){
-
-    try{
-
-        const response =
-            await fetch(
-                url,
-                {
-                    signal:signal
-                }
-            );
-
-
-        if(
-            signal.aborted
-        ){
-
-            return null;
-
-        }
-
-
-        if(!response.ok){
-
-            return null;
-
-        }
-
-
-        return await response.json();
-
-    }
-    catch(error){
-
-        if(
-            error.name ===
-            "AbortError"
-        ){
-
-            return null;
-
-        }
-
-
-        console.error(
-            error
-        );
-
-
-        return null;
-
-    }
-
-}
-
-
-/* =========================================================
-   MAIN SEARCH
+   MAIN SEARCH
 ========================================================= */
 
 async function findBestCard(
-    candidates,
-    currentID,
-    signal
+    candidates
 ){
 
-    /*
-       =====================================================
-       1. EXACT MATCH
-       =====================================================
-    */
+    searchCancelled = false;
 
-    for(
-        const candidate of candidates
-    ){
 
-        if(
-            signal.aborted ||
-            currentID !== searchID
-        ){
+    /* -----------------------------------------------------
+       1. EXACT
+    ----------------------------------------------------- */
 
-            return;
+    for(
+        const candidate of candidates
+    ){
 
-        }
+        if(searchCancelled){
+            return;
+        }
 
+        try{
 
-        const data =
-            await getCard(
-                "https://api.scryfall.com/cards/named?exact=" +
-                encodeURIComponent(
-                    candidate
-                ),
-                signal
-            );
+            const response =
+                await fetch(
+                    "https://api.scryfall.com/cards/named?exact=" +
+                    encodeURIComponent(candidate)
+                );
 
+            if(searchCancelled){
+                return;
+            }
 
-        if(
-            signal.aborted ||
-            currentID !== searchID
-        ){
+            if(response.ok){
 
-            return;
+                const data =
+                    await response.json();
 
-        }
+                showCard(
+                    data,
+                    data.name,
+                    "Exact Match"
+                );
 
+                return;
+            }
 
-        if(data){
+        }
+        catch(error){
 
-            showCard(
-                data,
-                data.name,
-                "Exact Match"
-            );
+            console.error(error);
 
-            return;
+        }
+    }
 
-        }
 
-    }
+    /* -----------------------------------------------------
+       2. SCRYFALL FUZZY
+    ----------------------------------------------------- */
 
+    for(
+        const candidate of candidates
+    ){
 
-    /*
-       =====================================================
-       2. SCRYFALL FUZZY
-       =====================================================
-    */
+        if(searchCancelled){
+            return;
+        }
 
-    for(
-        const candidate of candidates
-    ){
+        try{
 
-        if(
-            signal.aborted ||
-            currentID !== searchID
-        ){
+            const response =
+                await fetch(
+                    "https://api.scryfall.com/cards/named?fuzzy=" +
+                    encodeURIComponent(candidate)
+                );
 
-            return;
+            if(searchCancelled){
+                return;
+            }
 
-        }
+            if(response.ok){
 
+                const data =
+                    await response.json();
 
-        const data =
-            await getCard(
-                "https://api.scryfall.com/cards/named?fuzzy=" +
-                encodeURIComponent(
-                    candidate
-                ),
-                signal
-            );
+                showCard(
+                    data,
+                    data.name,
+                    "Scryfall Fuzzy"
+                );
 
+                return;
+            }
 
-        if(
-            signal.aborted ||
-            currentID !== searchID
-        ){
+        }
+        catch(error){
 
-            return;
+            console.error(error);
 
-        }
+        }
+    }
 
 
-        if(data){
+    /* -----------------------------------------------------
+       3. LOCAL FUZZY
+    ----------------------------------------------------- */
 
-            showCard(
-                data,
-                data.name,
-                "Scryfall Fuzzy"
-            );
+    result.textContent =
+        "Heard: " +
+        lastHeardText +
+        "\nTrying Local Fuzzy...";
 
-            return;
 
-        }
+    let bestMatch = null;
+    let bestScore = 0;
 
-    }
 
+    for(
+        const candidate of candidates
+    ){
 
-    /*
-       =====================================================
-       3. LOCAL FUZZY
-       =====================================================
-    */
+        const match =
+            await findClosestCard(
+                candidate
+            );
 
-    result.textContent =
-        "Heard: " +
-        lastHeardText +
-        "\nTrying Local Fuzzy...";
+        if(searchCancelled){
+            return;
+        }
 
+        if(
+            match &&
+            match.score > bestScore
+        ){
 
-    let bestMatch =
-        null;
+            bestMatch = match;
+            bestScore = match.score;
 
-    let bestScore =
-        0;
+        }
+    }
 
 
-    for(
-        const candidate of candidates
-    ){
+    if(bestMatch){
 
-        const match =
-            await findClosestCard(
-                candidate,
-                signal
-            );
+        try{
 
+            const response =
+                await fetch(
+                    "https://api.scryfall.com/cards/named?exact=" +
+                    encodeURIComponent(
+                        bestMatch.name
+                    )
+                );
 
-        if(
-            signal.aborted ||
-            currentID !== searchID
-        ){
+            if(searchCancelled){
+                return;
+            }
 
-            return;
+            if(response.ok){
 
-        }
+                const data =
+                    await response.json();
 
+                showCard(
+                    data,
+                    bestMatch.name,
+                    "Local Fuzzy"
+                );
 
-        if(
-            match &&
-            match.score > bestScore
-        ){
+                return;
+            }
 
-            bestMatch =
-                match;
+        }
+        catch(error){
 
-            bestScore =
-                match.score;
+            console.error(error);
 
-        }
+        }
+    }
 
-    }
 
+    /* -----------------------------------------------------
+       4. PHONETIC
+    ----------------------------------------------------- */
 
-    if(bestMatch){
+    result.textContent =
+        "Heard: " +
+        lastHeardText +
+        "\nTrying Phonetic Match...";
 
-        const data =
-            await getCard(
-                "https://api.scryfall.com/cards/named?exact=" +
-                encodeURIComponent(
-                    bestMatch.name
-                ),
-                signal
-            );
 
+    const phonetic =
+        await findPhoneticCard(
+            candidates
+        );
 
-        if(
-            signal.aborted ||
-            currentID !== searchID
-        ){
 
-            return;
+    if(searchCancelled){
+        return;
+    }
 
-        }
 
+    if(phonetic){
 
-        if(data){
+        try{
 
-            showCard(
-                data,
-                bestMatch.name,
-                "Local Fuzzy"
-            );
+            const response =
+                await fetch(
+                    "https://api.scryfall.com/cards/named?exact=" +
+                    encodeURIComponent(
+                        phonetic.name
+                    )
+                );
 
-            return;
+            if(searchCancelled){
+                return;
+            }
 
-        }
+            if(response.ok){
 
-    }
+                const data =
+                    await response.json();
 
+                showCard(
+                    data,
+                    phonetic.name,
+                    "Phonetic Match"
+                );
 
-    /*
-       =====================================================
-       4. PHONETIC
-       =====================================================
-    */
+                return;
+            }
 
-    result.textContent =
-        "Heard: " +
-        lastHeardText +
-        "\nTrying Phonetic Match...";
+        }
+        catch(error){
 
+            console.error(error);
 
-    const phonetic =
-        await findPhoneticCard(
-            candidates,
-            signal
-        );
+        }
+    }
 
 
-    if(
-        signal.aborted ||
-        currentID !== searchID
-    ){
+    if(!searchCancelled){
 
-        return;
+        result.textContent =
+            "Heard: " +
+            lastHeardText +
+            "\nCard not found.";
 
-    }
-
-
-    if(phonetic){
-
-        const data =
-            await getCard(
-                "https://api.scryfall.com/cards/named?exact=" +
-                encodeURIComponent(
-                    phonetic.name
-                ),
-                signal
-            );
-
-
-        if(
-            signal.aborted ||
-            currentID !== searchID
-        ){
-
-            return;
-
-        }
-
-
-        if(data){
-
-            showCard(
-                data,
-                phonetic.name,
-                "Phonetic Match"
-            );
-
-            return;
-
-        }
-
-    }
-
-
-    /*
-       =====================================================
-       NOTHING FOUND
-       =====================================================
-    */
-
-    if(
-        !signal.aborted &&
-        currentID === searchID
-    ){
-
-        result.textContent =
-            "Heard: " +
-            lastHeardText +
-            "\nCard not found.";
-
-    }
+    }
 
 }
 
 
 /* =========================================================
-   SHOW CARD
+   SHOW CARD
 ========================================================= */
 
 function showCard(
-    data,
-    matchedName,
-    method
+    data,
+    matchedName,
+    method
 ){
 
-    if(
-        searchController &&
-        searchController.signal.aborted
-    ){
+    if(searchCancelled){
+        return;
+    }
 
-        return;
-
-    }
-
-
-    result.textContent =
-        "Heard: " +
-        lastHeardText +
-        "\nFound by: " +
-        method +
-        "\nMatched: " +
-        matchedName;
+    result.textContent =
+        "Heard: " +
+        lastHeardText +
+        "\nFound by: " +
+        method +
+        "\nMatched: " +
+        matchedName;
 
 
-    let imageURL =
-        null;
+    let imageURL = null;
 
 
-    if(
-        data.image_uris &&
-        data.image_uris.normal
-    ){
+    if(
+        data.image_uris &&
+        data.image_uris.normal
+    ){
 
-        imageURL =
-            data.image_uris.normal;
+        imageURL =
+            data.image_uris.normal;
 
-    }
-    else if(
-        data.card_faces &&
-        data.card_faces[0] &&
-        data.card_faces[0].image_uris
-    ){
+    }
+    else if(
+        data.card_faces &&
+        data.card_faces[0] &&
+        data.card_faces[0].image_uris
+    ){
 
-        imageURL =
-            data.card_faces[0]
-                .image_uris
-                .normal;
+        imageURL =
+            data.card_faces[0]
+            .image_uris
+            .normal;
 
-    }
-
-
-    if(imageURL){
-
-        cardImage.src =
-            imageURL;
-
-        cardImage.style.display =
-            "block";
-
-    }
+    }
 
 
-    stopButton.disabled =
-        true;
+    if(imageURL){
+
+        cardImage.src =
+            imageURL;
+
+        cardImage.style.display =
+            "block";
+
+    }
+
+
+    button.disabled = false;
 
 }
 
 
 /* =========================================================
-   MANUAL SEARCH
+   MANUAL SEARCH
 ========================================================= */
 
 manualButton.addEventListener(
-    "click",
-    manualSearch
+    "click",
+    manualSearch
 );
 
 
 manualInput.addEventListener(
-    "keydown",
-    function(event){
+    "keydown",
+    function(event){
 
-        if(
-            event.key ===
-            "Enter"
-        ){
+        if(event.key === "Enter"){
 
-            manualSearch();
+            manualSearch();
 
-        }
+        }
 
-    }
+    }
 );
 
 
 function manualSearch(){
 
-    const text =
-        manualInput.value.trim();
+    const text =
+        manualInput.value.trim();
+
+    if(!text){
+
+        return;
+
+    }
 
 
-    if(!text){
+    /*
+       Cancel any current voice search.
+    */
 
-        return;
+    searchCancelled = true;
 
-    }
+    try{
 
+        recognition.abort();
 
-    /*
-       Cancel speech.
-    */
-
-    clearTimeout(timeout);
-
-
-    if(recognition){
-
-        try{
-
-            recognition.abort();
-
-        }
-        catch(e){}
-
-    }
+    }
+    catch(e){}
 
 
-    /*
-       Start new search.
-    */
-
-    searchID++;
+    lastHeardText = "";
 
 
-    cancelSearch();
+    cardImage.style.display =
+        "none";
 
 
-    searchController =
-        new AbortController();
+    result.textContent =
+        "Typed: " +
+        text +
+        "\nSearching...";
 
 
-    const currentID =
-        searchID;
+    searchCancelled = false;
 
 
-    lastHeardText =
-        "";
-
-
-    cardImage.style.display =
-        "none";
-
-
-    result.textContent =
-        "Typed: " +
-        text +
-        "\nSearching...";
-
-
-    stopButton.disabled =
-        false;
-
-
-    findBestCard(
-        [text],
-        currentID,
-        searchController.signal
-    );
+    findBestCard(
+        [text]
+    );
 
 }
 
