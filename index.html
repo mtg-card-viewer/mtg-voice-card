@@ -238,12 +238,6 @@ else{
             catch(e){}
 
 
-            /*
-               Inspreken is klaar.
-               Nu begint de zoekfase.
-               De stopknop wordt daarom actief.
-            */
-
             button.disabled = false;
 
             isSearching = true;
@@ -294,12 +288,6 @@ else{
 
             button.disabled = false;
 
-            /*
-               Tijdens het zoeken moet de stopknop
-               actief blijven. De recognition is namelijk
-               al klaar, maar de zoekactie loopt nog.
-            */
-
             if(!isSearching){
 
                 stopButton.disabled = true;
@@ -338,7 +326,7 @@ function startListening(){
 
     /*
        Tijdens de maximaal 3 seconden inspreken
-       is Stop niet nodig.
+       is Stop uitgeschakeld.
     */
 
     stopButton.disabled = true;
@@ -382,12 +370,6 @@ function startListening(){
 function stopSearch(){
 
     clearTimeout(timeout);
-
-    /*
-       Dit stopt de zoekactie.
-       De speech recognition hoeft hier niet meer
-       gestopt te worden, want het inspreken is al klaar.
-    */
 
     searchCancelled = true;
     isSearching = false;
@@ -527,6 +509,79 @@ async function getCardNames(){
 
         return null;
     }
+}
+
+
+/* =========================================================
+   GET ENGLISH CARD
+========================================================= */
+
+async function getEnglishCard(cardName){
+
+    if(searchCancelled){
+        return null;
+    }
+
+    try{
+
+        /*
+           Search Scryfall specifically for an English
+           printing of this exact card name.
+        */
+
+        const query =
+            '!"' +
+            cardName +
+            '" lang:en';
+
+        const response =
+            await fetch(
+                "https://api.scryfall.com/cards/search?q=" +
+                encodeURIComponent(query)
+            );
+
+        if(searchCancelled){
+            return null;
+        }
+
+        if(!response.ok){
+            return null;
+        }
+
+        const data =
+            await response.json();
+
+        if(
+            data.data &&
+            data.data.length
+        ){
+
+            for(
+                const card of data.data
+            ){
+
+                if(
+                    card.lang === "en" &&
+                    card.name.toLowerCase() ===
+                    cardName.toLowerCase()
+                ){
+
+                    return card;
+
+                }
+
+            }
+
+        }
+
+    }
+    catch(error){
+
+        console.error(error);
+
+    }
+
+    return null;
 }
 
 
@@ -724,6 +779,11 @@ async function findBestCard(
 
         try{
 
+            /*
+               First determine whether Scryfall recognizes
+               the spoken name exactly.
+            */
+
             const response =
                 await fetch(
                     "https://api.scryfall.com/cards/named?exact=" +
@@ -739,16 +799,35 @@ async function findBestCard(
                 const data =
                     await response.json();
 
-                showCard(
-                    data,
-                    data.name,
-                    "Exact Match"
-                );
+                /*
+                   Now explicitly retrieve the English
+                   printing of the recognized card.
+                */
 
-                isSearching = false;
-                stopButton.disabled = true;
+                const englishCard =
+                    await getEnglishCard(
+                        data.name
+                    );
 
-                return;
+                if(searchCancelled){
+                    return;
+                }
+
+                if(englishCard){
+
+                    showCard(
+                        englishCard,
+                        englishCard.name,
+                        "Exact Match"
+                    );
+
+                    isSearching = false;
+                    stopButton.disabled = true;
+
+                    return;
+
+                }
+
             }
 
         }
@@ -789,16 +868,35 @@ async function findBestCard(
                 const data =
                     await response.json();
 
-                showCard(
-                    data,
-                    data.name,
-                    "Scryfall Fuzzy"
-                );
+                /*
+                   Always replace the returned printing with
+                   an explicitly English printing.
+                */
 
-                isSearching = false;
-                stopButton.disabled = true;
+                const englishCard =
+                    await getEnglishCard(
+                        data.name
+                    );
 
-                return;
+                if(searchCancelled){
+                    return;
+                }
+
+                if(englishCard){
+
+                    showCard(
+                        englishCard,
+                        englishCard.name,
+                        "Scryfall Fuzzy"
+                    );
+
+                    isSearching = false;
+                    stopButton.disabled = true;
+
+                    return;
+
+                }
+
             }
 
         }
@@ -851,41 +949,27 @@ async function findBestCard(
 
     if(bestMatch){
 
-        try{
+        const englishCard =
+            await getEnglishCard(
+                bestMatch.name
+            );
 
-            const response =
-                await fetch(
-                    "https://api.scryfall.com/cards/named?exact=" +
-                    encodeURIComponent(
-                        bestMatch.name
-                    )
-                );
-
-            if(searchCancelled){
-                return;
-            }
-
-            if(response.ok){
-
-                const data =
-                    await response.json();
-
-                showCard(
-                    data,
-                    bestMatch.name,
-                    "Local Fuzzy"
-                );
-
-                isSearching = false;
-                stopButton.disabled = true;
-
-                return;
-            }
-
+        if(searchCancelled){
+            return;
         }
-        catch(error){
 
-            console.error(error);
+        if(englishCard){
+
+            showCard(
+                englishCard,
+                englishCard.name,
+                "Local Fuzzy"
+            );
+
+            isSearching = false;
+            stopButton.disabled = true;
+
+            return;
 
         }
 
@@ -915,43 +999,30 @@ async function findBestCard(
 
     if(phonetic){
 
-        try{
+        const englishCard =
+            await getEnglishCard(
+                phonetic.name
+            );
 
-            const response =
-                await fetch(
-                    "https://api.scryfall.com/cards/named?exact=" +
-                    encodeURIComponent(
-                        phonetic.name
-                    )
-                );
+        if(searchCancelled){
+            return;
+        }
 
-            if(searchCancelled){
-                return;
-            }
+        if(englishCard){
 
-            if(response.ok){
+            showCard(
+                englishCard,
+                englishCard.name,
+                "Phonetic Match"
+            );
 
-                const data =
-                    await response.json();
+            isSearching = false;
+            stopButton.disabled = true;
 
-                showCard(
-                    data,
-                    phonetic.name,
-                    "Phonetic Match"
-                );
-
-                isSearching = false;
-                stopButton.disabled = true;
-
-                return;
-            }
+            return;
 
         }
-        catch(error){
 
-            console.error(error);
-
-        }
     }
 
 
@@ -983,6 +1054,24 @@ function showCard(
     if(searchCancelled){
         return;
     }
+
+    /*
+       Extra safety check:
+       Never display a non-English card.
+    */
+
+    if(data.lang !== "en"){
+
+        console.error(
+            "Non-English card rejected:",
+            data.lang,
+            data.name
+        );
+
+        return;
+
+    }
+
 
     result.textContent =
         "Heard: " +
