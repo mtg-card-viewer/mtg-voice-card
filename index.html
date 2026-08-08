@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="nl">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -24,77 +24,103 @@
             padding: 20px 30px;
             border-radius: 15px;
             border: none;
-            cursor: pointer;
+            background: white;
+            color: black;
         }
 
         #result {
             margin-top: 30px;
             font-size: 22px;
+            max-width: 90%;
         }
     </style>
 </head>
 
 <body>
 
-    <button id="listenButton">🎤 Spreek kaartnaam</button>
+    <button id="listenButton">🎤 Speak card name</button>
 
     <div id="result">
-        Tik op de knop en spreek een Magic-kaart uit.
+        Tap the button and say a Magic card name.
     </div>
 
 <script>
 
-    const button = document.getElementById("listenButton");
-    const result = document.getElementById("result");
+const button = document.getElementById("listenButton");
+const result = document.getElementById("result");
 
-    const SpeechRecognition =
-        window.SpeechRecognition ||
-        window.webkitSpeechRecognition;
+const SpeechRecognition =
+    window.SpeechRecognition ||
+    window.webkitSpeechRecognition;
 
-    if (!SpeechRecognition) {
+if (!SpeechRecognition) {
+
+    result.textContent =
+        "Speech recognition is not supported.";
+
+} else {
+
+    const recognition = new SpeechRecognition();
+
+    recognition.lang = "en-US";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    let timeout;
+
+    button.addEventListener("click", () => {
+
+        clearTimeout(timeout);
+
+        result.textContent = "🎤 Listening...";
+        button.disabled = true;
+
+        try {
+            recognition.start();
+        } catch (e) {
+            console.log(e);
+        }
+
+        // Stop listening after 7 seconds
+        timeout = setTimeout(() => {
+            recognition.stop();
+        }, 7000);
+
+    });
+
+    recognition.onresult = (event) => {
+
+        clearTimeout(timeout);
+
+        const spokenText =
+            event.results[0][0].transcript.trim();
 
         result.textContent =
-            "Spraakherkenning wordt niet ondersteund door deze browser.";
+            "You said: " + spokenText;
 
-    } else {
+        recognition.stop();
+    };
 
-        const recognition = new SpeechRecognition();
+    recognition.onerror = (event) => {
 
-        recognition.lang = "nl-NL";
-        recognition.continuous = false;
-        recognition.interimResults = false;
+        clearTimeout(timeout);
 
-        button.addEventListener("click", () => {
+        result.textContent =
+            "Speech error: " + event.error;
 
-            result.textContent = "🎤 Luisteren...";
+        button.disabled = false;
+    };
 
-            recognition.start();
+    recognition.onend = () => {
 
-        });
+        clearTimeout(timeout);
 
-        recognition.onresult = (event) => {
+        button.disabled = false;
 
-            const spokenText =
-                event.results[0][0].transcript;
+    };
 
-            result.textContent =
-                "Je zei: " + spokenText;
-
-        };
-
-        recognition.onerror = (event) => {
-
-            result.textContent =
-                "Fout bij spraakherkenning: " + event.error;
-
-        };
-
-        recognition.onend = () => {
-
-            button.textContent = "🎤 Spreek kaartnaam";
-
-        };
-    }
+}
 
 </script>
 
