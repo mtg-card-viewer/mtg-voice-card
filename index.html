@@ -1,4 +1,6 @@
+/* werkende versie, fonetisch en zoekveld, stopknop om zoeken te stoppen */
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -74,6 +76,7 @@ button:disabled{
     margin-top:10px;
 }
 </style>
+
 </head>
 
 <body>
@@ -91,22 +94,23 @@ button:disabled{
 
 <div id="manual">
 
-    <input
-        id="manualInput"
-        type="text"
-        placeholder="Type difficult card name..."
-        autocomplete="off"
-        autocorrect="off"
-        autocapitalize="off"
-        spellcheck="false"
-    >
+```
+<input
+    id="manualInput"
+    type="text"
+    placeholder="Type difficult card name..."
+    autocomplete="off"
+    autocorrect="off"
+    autocapitalize="off"
+    spellcheck="false"
+>
 
-    <button id="manualButton">
-        🔎 Search card
-    </button>
+<button id="manualButton">
+    🔎 Search card
+</button>
+```
 
 </div>
-
 
 <script>
 
@@ -134,6 +138,7 @@ let cardNamesCache = null;
 let recognition = null;
 let timeout = null;
 let searchCancelled = false;
+let isSearching = false;
 
 
 /* =========================================================
@@ -177,11 +182,11 @@ else{
     );
 
 
-    /* STOP */
+    /* STOP SEARCH */
 
     stopButton.addEventListener(
         "click",
-        stopListening
+        stopSearch
     );
 
 
@@ -234,11 +239,19 @@ else{
             catch(e){}
 
 
-            button.disabled = false;
-            stopButton.disabled = true;
+            /*
+               Inspreken is klaar.
+               Nu begint de zoekfase.
+               De stopknop wordt daarom actief.
+            */
 
+            button.disabled = false;
+
+            isSearching = true;
+            stopButton.disabled = false;
 
             searchCancelled = false;
+
 
             await findBestCard(
                 candidates
@@ -255,7 +268,12 @@ else{
             clearTimeout(timeout);
 
             button.disabled = false;
-            stopButton.disabled = true;
+
+            if(!isSearching){
+
+                stopButton.disabled = true;
+
+            }
 
             if(event.error !== "aborted"){
 
@@ -276,7 +294,18 @@ else{
             clearTimeout(timeout);
 
             button.disabled = false;
-            stopButton.disabled = true;
+
+            /*
+               Tijdens het zoeken moet de stopknop
+               actief blijven. De recognition is namelijk
+               al klaar, maar de zoekactie loopt nog.
+            */
+
+            if(!isSearching){
+
+                stopButton.disabled = true;
+
+            }
 
         };
 
@@ -296,6 +325,7 @@ function startListening(){
     clearTimeout(timeout);
 
     searchCancelled = true;
+    isSearching = false;
 
     lastHeardText = "";
 
@@ -306,7 +336,13 @@ function startListening(){
         "🎤 Listening...";
 
     button.disabled = true;
-    stopButton.disabled = false;
+
+    /*
+       Tijdens de maximaal 3 seconden inspreken
+       is Stop niet nodig.
+    */
+
+    stopButton.disabled = true;
 
     searchCancelled = false;
 
@@ -341,32 +377,27 @@ function startListening(){
 
 
 /* =========================================================
-   STOP
+   STOP SEARCH
 ========================================================= */
 
-function stopListening(){
+function stopSearch(){
 
     clearTimeout(timeout);
 
+    /*
+       Dit stopt de zoekactie.
+       De speech recognition hoeft hier niet meer
+       gestopt te worden, want het inspreken is al klaar.
+    */
+
     searchCancelled = true;
+    isSearching = false;
 
-    try{
-        recognition.abort();
-    }
-    catch(e){
-
-        try{
-            recognition.stop();
-        }
-        catch(error){}
-
-    }
-
-    button.disabled = false;
     stopButton.disabled = true;
+    button.disabled = false;
 
     result.textContent =
-        "⏹ Stopped.";
+        "⏹ Search stopped.";
 
 }
 
@@ -675,6 +706,9 @@ async function findBestCard(
 ){
 
     searchCancelled = false;
+    isSearching = true;
+
+    stopButton.disabled = false;
 
 
     /* -----------------------------------------------------
@@ -711,6 +745,9 @@ async function findBestCard(
                     data.name,
                     "Exact Match"
                 );
+
+                isSearching = false;
+                stopButton.disabled = true;
 
                 return;
             }
@@ -758,6 +795,9 @@ async function findBestCard(
                     data.name,
                     "Scryfall Fuzzy"
                 );
+
+                isSearching = false;
+                stopButton.disabled = true;
 
                 return;
             }
@@ -837,6 +877,9 @@ async function findBestCard(
                     "Local Fuzzy"
                 );
 
+                isSearching = false;
+                stopButton.disabled = true;
+
                 return;
             }
 
@@ -846,6 +889,7 @@ async function findBestCard(
             console.error(error);
 
         }
+
     }
 
 
@@ -897,6 +941,9 @@ async function findBestCard(
                     "Phonetic Match"
                 );
 
+                isSearching = false;
+                stopButton.disabled = true;
+
                 return;
             }
 
@@ -915,6 +962,9 @@ async function findBestCard(
             "Heard: " +
             lastHeardText +
             "\nCard not found.";
+
+        isSearching = false;
+        stopButton.disabled = true;
 
     }
 
@@ -1023,10 +1073,11 @@ function manualSearch(){
 
 
     /*
-       Cancel any current voice search.
+       Cancel any current voice/search operation.
     */
 
     searchCancelled = true;
+    isSearching = false;
 
     try{
 
@@ -1050,6 +1101,9 @@ function manualSearch(){
 
 
     searchCancelled = false;
+    isSearching = true;
+
+    stopButton.disabled = false;
 
 
     findBestCard(
