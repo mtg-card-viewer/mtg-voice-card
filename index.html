@@ -1,4 +1,3 @@
-```html
 <!DOCTYPE html>
 
 <html lang="en">
@@ -50,6 +49,30 @@ button:disabled{
     background:#d33;
     color:white;
 }
+
+
+/* =========================================================
+   LISTEN PROGRESS BAR
+========================================================= */
+
+#listenProgress{
+    display:none;
+    width:90%;
+    max-width:400px;
+    height:10px;
+    background:#444;
+    border-radius:5px;
+    overflow:hidden;
+    margin:10px auto 0;
+}
+
+#listenProgressBar{
+    width:100%;
+    height:100%;
+    background:#fff;
+    transform-origin:left;
+}
+
 
 #result{
     margin-top:20px;
@@ -173,21 +196,29 @@ body.cardMode{
 
 <div>
 
-    <button id="listenButton">
-        🎤 Speak card name
-    </button>
+```
+<button id="listenButton">
+    🎤 Speak card name
+</button>
 
-    <button id="stopButton" disabled>
-        ⏹ Stop
-    </button>
+<button id="stopButton" disabled>
+    ⏹ Stop
+</button>
+```
 
 </div>
 
+<!-- ===================================================
+     LISTEN PROGRESS
+=================================================== -->
+
+<div id="listenProgress">
+    <div id="listenProgressBar"></div>
+</div>
 
 <div id="result">
     Tap the button and say a Magic card name.
 </div>
-
 
 <!-- ===================================================
      CARD SEARCH
@@ -195,23 +226,24 @@ body.cardMode{
 
 <div id="manual">
 
-    <input
-        id="manualInput"
-        type="text"
-        placeholder="Type difficult card name..."
-        autocomplete="new-password"
-        autocorrect="off"
-        autocapitalize="off"
-        spellcheck="false"
-        data-form-type="other"
-    >
+```
+<input
+    id="manualInput"
+    type="text"
+    placeholder="Type difficult card name..."
+    autocomplete="new-password"
+    autocorrect="off"
+    autocapitalize="off"
+    spellcheck="false"
+    data-form-type="other"
+>
 
-    <button id="manualButton">
-        🔎 Search card
-    </button>
+<button id="manualButton">
+    🔎 Search card
+</button>
+```
 
 </div>
-
 
 <!-- ===================================================
      KEYWORD SEARCH
@@ -219,29 +251,31 @@ body.cardMode{
 
 <div id="keywordSection">
 
-    <input
-        id="keywordInput"
-        type="text"
-        placeholder="Keyword: haste, scry, connive..."
-        autocomplete="new-password"
-        autocorrect="off"
-        autocapitalize="off"
-        spellcheck="false"
-        data-form-type="other"
-    >
+```
+<input
+    id="keywordInput"
+    type="text"
+    placeholder="Keyword: haste, scry, connive..."
+    autocomplete="new-password"
+    autocorrect="off"
+    autocapitalize="off"
+    spellcheck="false"
+    data-form-type="other"
+>
 
-    <button id="keywordButton">
-        📖 Explain keyword
-    </button>
+<button id="keywordButton">
+    📖 Explain keyword
+</button>
 
 
-    <div id="keywordResult">
+<div id="keywordResult">
 
-        <div id="keywordTitle"></div>
+    <div id="keywordTitle"></div>
 
-        <div id="keywordDescription"></div>
+    <div id="keywordDescription"></div>
 
-    </div>
+</div>
+```
 
 </div>
 
@@ -254,8 +288,9 @@ body.cardMode{
 <div id="cardView">
 
 <img
-    id="fullscreenCard"
-    alt="Magic card"
+id="fullscreenCard"
+alt="Magic card"
+
 >
 
 </div>
@@ -327,6 +362,16 @@ const fullscreenCard =
         "fullscreenCard"
     );
 
+const listenProgress =
+    document.getElementById(
+        "listenProgress"
+    );
+
+const listenProgressBar =
+    document.getElementById(
+        "listenProgressBar"
+    );
+
 
 /* =========================================================
    VARIABLES
@@ -349,6 +394,57 @@ let keywordAbilitiesCache = null;
 let keywordActionsCache = null;
 
 let abilityWordsCache = null;
+
+
+/* =========================================================
+   LISTEN PROGRESS
+========================================================= */
+
+function startListenProgress(){
+
+    listenProgress.style.display =
+        "block";
+
+    listenProgressBar.style.transition =
+        "none";
+
+    listenProgressBar.style.width =
+        "100%";
+
+
+    requestAnimationFrame(
+        function(){
+
+            requestAnimationFrame(
+                function(){
+
+                    listenProgressBar.style.transition =
+                        "width 3s linear";
+
+                    listenProgressBar.style.width =
+                        "0%";
+
+                }
+            );
+
+        }
+    );
+
+}
+
+
+function stopListenProgress(){
+
+    listenProgressBar.style.transition =
+        "none";
+
+    listenProgressBar.style.width =
+        "100%";
+
+    listenProgress.style.display =
+        "none";
+
+}
 
 
 /* =========================================================
@@ -396,10 +492,57 @@ else{
     );
 
 
+    /*
+       =====================================================
+       MICROPHONE REALLY STARTED
+       =====================================================
+    */
+
+    recognition.onstart =
+        function(){
+
+            /*
+               The microphone / speech recognizer has
+               actually started.
+
+               Only NOW do we start the 3-second timer
+               and the visual progress bar.
+            */
+
+            clearTimeout(timeout);
+
+
+            result.textContent =
+                "🎤 Listening — speak now";
+
+
+            startListenProgress();
+
+
+            timeout =
+                setTimeout(
+                    function(){
+
+                        try{
+
+                            recognition.stop();
+
+                        }
+                        catch(e){}
+
+                    },
+                    3000
+                );
+
+        };
+
+
     recognition.onresult =
         async function(event){
 
             clearTimeout(timeout);
+
+            stopListenProgress();
 
 
             const candidates = [];
@@ -471,6 +614,8 @@ else{
 
             clearTimeout(timeout);
 
+            stopListenProgress();
+
             button.disabled = false;
 
 
@@ -495,7 +640,16 @@ else{
     recognition.onend =
         function(){
 
+            /*
+               onend can happen after a result or after
+               the 3-second timeout.
+
+               The progress bar is always stopped here.
+            */
+
             clearTimeout(timeout);
+
+            stopListenProgress();
 
             button.disabled = false;
 
@@ -523,28 +677,13 @@ function startListening(){
 
     }
 
-
     closeCardView();
-
 
     clearTimeout(timeout);
 
-
-    /*
-       Improvement 5:
-       Clear card search field.
-    */
-
     manualInput.value = "";
 
-
-    /*
-       Improvement 5:
-       Clear keyword search field.
-    */
-
     keywordInput.value = "";
-
 
     searchCancelled = true;
 
@@ -552,22 +691,15 @@ function startListening(){
 
     lastHeardText = "";
 
-
     button.disabled = true;
 
     stopButton.disabled = true;
 
-
     searchCancelled = false;
 
-
     /*
-       IMPORTANT:
        Start speech recognition immediately.
-
-       Safari/iPad may need some time after
-       recognition.start() before it is actually
-       ready to receive speech.
+       Safari now gets 1 second to wake up.
     */
 
     try{
@@ -587,82 +719,57 @@ function startListening(){
 
     }
 
-
     /*
-       During this first second the user should
-       NOT speak yet.
-
-       The progress bar must NOT run here.
+       Give Safari time to activate the
+       speech engine before the user speaks.
     */
 
     result.textContent =
         "🎤 Get ready...";
 
+    setTimeout(function(){
 
-    setTimeout(
-        function(){
+        if(searchCancelled){
 
-            if(searchCancelled){
+            return;
 
-                return;
+        }
 
-            }
+        result.textContent =
+            "🎤 Speak now";
 
+        stopButton.disabled = false;
 
-            /*
-               Now the user can speak.
-            */
+        /*
+           If you already added the recording
+           progress bar, keep this line.
+           Otherwise remove it.
+        */
 
-            result.textContent =
-                "🎤 Speak now";
+        if(typeof startRecordingBar === "function"){
 
+            startRecordingBar();
 
-            stopButton.disabled = false;
+        }
 
+        timeout =
+            setTimeout(
+                function(){
 
-            /*
-               Start the recording/progress bar
-               only now, after the 1 second
-               Safari warm-up period.
-            */
+                    try{
 
-            if(
-                typeof startRecordingBar ===
-                "function"
-            ){
+                        recognition.stop();
 
-                startRecordingBar();
+                    }
+                    catch(e){}
 
-            }
+                },
+                3000
+            );
 
-
-            /*
-               Give the user exactly 3 seconds
-               of speaking time.
-            */
-
-            timeout =
-                setTimeout(
-                    function(){
-
-                        try{
-
-                            recognition.stop();
-
-                        }
-                        catch(e){}
-
-                    },
-                    3000
-                );
-
-
-        },
-        1000
-    );
+    },1000);
 
 }
-
 
 /* =========================================================
    STOP SEARCH
@@ -671,6 +778,8 @@ function startListening(){
 function stopSearch(){
 
     clearTimeout(timeout);
+
+    stopListenProgress();
 
 
     searchCancelled = true;
@@ -1674,6 +1783,9 @@ function manualSearch(){
     catch(e){}
 
 
+    stopListenProgress();
+
+
     lastHeardText = "";
 
 
@@ -1895,6 +2007,9 @@ const abilityWordDefinitions = {
     "hellbent":
         "An ability word for abilities that get a bonus if you have no cards in your hand. Each hellbent ability works differently.",
 
+    "ferocious":
+        "An ability word for abilities that get a bonus or additional effect if you control a creature with power 4 or greater. Each ferocious ability works differently.",
+
     "pack tactics":
         "An ability word for abilities that trigger when you attack with creatures whose total power is 6 or greater. Each pack tactics ability works differently.",
 
@@ -1916,11 +2031,17 @@ const abilityWordDefinitions = {
     "bloodthirst":
         "An ability word for creatures and abilities that get a bonus if an opponent was dealt damage this turn. The amount of the bonus depends on the card.",
 
+    "metalcraft":
+        "An ability word for abilities that get a bonus or additional effect if you control three or more artifacts.",
+
     "domain":
         "An ability word for abilities whose effect depends on the number of basic land types among lands you control.",
 
     "sneak":
-        "An ability word used on some abilities that reward attacking with creatures that entered the battlefield this turn. The exact effect is defined by the card."
+        "An ability word used on some abilities that reward attacking with creatures that entered the battlefield this turn. The exact effect is defined by the card.",
+
+    "pack tactics":
+        "An ability word for abilities that trigger when you attack with creatures with total power 6 or greater. Each ability defines its own effect."
 
 };
 
@@ -2217,6 +2338,8 @@ async function searchKeyword(){
     catch(e){}
 
 
+    stopListenProgress();
+
     stopButton.disabled = true;
 
 
@@ -2316,4 +2439,3 @@ async function searchKeyword(){
 
 </body>
 </html>
-```
