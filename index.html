@@ -50,6 +50,7 @@ button:disabled{
     color:white;
 }
 
+
 /* =========================================================
    LISTEN PROGRESS BAR
 ========================================================= */
@@ -71,6 +72,7 @@ button:disabled{
     background:#fff;
     transform-origin:left;
 }
+
 
 #result{
     margin-top:20px;
@@ -490,6 +492,51 @@ else{
     );
 
 
+    /*
+       =====================================================
+       MICROPHONE REALLY STARTED
+       =====================================================
+    */
+
+    recognition.onstart =
+        function(){
+
+            /*
+               The microphone / speech recognizer has
+               actually started.
+
+               Only NOW do we start the 3-second timer
+               and the visual progress bar.
+            */
+
+            clearTimeout(timeout);
+
+
+            result.textContent =
+                "🎤 Listening — speak now";
+
+
+            startListenProgress();
+
+
+            timeout =
+                setTimeout(
+                    function(){
+
+                        try{
+
+                            recognition.stop();
+
+                        }
+                        catch(e){}
+
+                    },
+                    3000
+                );
+
+        };
+
+
     recognition.onresult =
         async function(event){
 
@@ -593,6 +640,13 @@ else{
     recognition.onend =
         function(){
 
+            /*
+               onend can happen after a result or after
+               the 3-second timeout.
+
+               The progress bar is always stopped here.
+            */
+
             clearTimeout(timeout);
 
             stopListenProgress();
@@ -653,8 +707,20 @@ function startListening(){
     lastHeardText = "";
 
 
+    /*
+       Important:
+       The progress bar is NOT started here.
+
+       We wait for recognition.onstart so the visual
+       timer starts when SpeechRecognition actually
+       reports that it has started.
+    */
+
+    stopListenProgress();
+
+
     result.textContent =
-        "🎤 Listening...";
+        "🎤 Starting microphone...";
 
 
     button.disabled = true;
@@ -663,13 +729,6 @@ function startListening(){
 
 
     searchCancelled = false;
-
-
-    /*
-       Start the 3-second visual timer.
-    */
-
-    startListenProgress();
 
 
     try{
@@ -688,23 +747,6 @@ function startListening(){
         stopButton.disabled = true;
 
     }
-
-
-    timeout =
-        setTimeout(
-            function(){
-
-                try{
-
-                    recognition.stop();
-
-                }
-                catch(e){}
-
-
-            },
-            3000
-        );
 
 }
 
@@ -1887,12 +1929,6 @@ async function findKeywordType(
 
 /* =========================================================
    ABILITY WORD DEFINITIONS
-=========================================================
-
-   Ability words do not have one fixed rules meaning.
-   Therefore we do NOT take random reminder text from
-   cards. Instead we provide a general explanation.
-
 ========================================================= */
 
 const abilityWordDefinitions = {
@@ -2015,17 +2051,6 @@ function getAbilityWordDefinition(
     }
 
 
-    /*
-       Important fallback.
-
-       If Scryfall tells us that the word is an
-       ability word but we do not yet have a
-       specific definition above, NEVER use
-       random reminder text from a card.
-
-       Instead give a safe generic explanation.
-    */
-
     return (
         "An ability word used to group abilities " +
         "that share a particular theme or condition. " +
@@ -2074,12 +2099,6 @@ function extractReminderText(
             normalizeText(line);
 
 
-        /*
-           Do NOT use this for ability words.
-           It is only useful for keyword abilities
-           and keyword actions.
-        */
-
         if(
             normalizedLine.includes(
                 normalizedKeyword
@@ -2124,14 +2143,6 @@ async function getKeywordDescription(
     }
 
 
-    /*
-       =====================================================
-       ABILITY WORD
-       =====================================================
-
-       NEVER search random card reminder text for these.
-    */
-
     if(
         keywordType ===
         "Ability Word"
@@ -2150,12 +2161,6 @@ async function getKeywordDescription(
 
     }
 
-
-    /*
-       =====================================================
-       KEYWORD ABILITY / KEYWORD ACTION
-       =====================================================
-    */
 
     const query =
         "keyword:" +
@@ -2200,11 +2205,6 @@ async function getKeywordDescription(
 
         }
 
-
-        /*
-           Look through English cards and find
-           actual reminder text.
-        */
 
         for(
             const card of data.data
@@ -2295,11 +2295,6 @@ async function searchKeyword(){
     }
 
 
-    /*
-       Improvement 5:
-       Clear keyword field immediately.
-    */
-
     keywordInput.value = "";
 
 
@@ -2339,11 +2334,6 @@ async function searchKeyword(){
     searchCancelled = false;
 
 
-    /*
-       First determine exactly what kind of
-       Scryfall keyword we are dealing with.
-    */
-
     const keywordType =
         await findKeywordType(
             keyword
@@ -2381,19 +2371,11 @@ async function searchKeyword(){
     }
 
 
-    /*
-       Show the type as part of the result.
-    */
-
     keywordTitle.textContent =
         keyword +
         " — " +
         keywordType;
 
-
-    /*
-       Get the correct explanation.
-    */
 
     const information =
         await getKeywordDescription(
@@ -2422,10 +2404,6 @@ async function searchKeyword(){
 
     }
 
-
-    /*
-       Scroll directly to the explanation.
-    */
 
     keywordResult.scrollIntoView({
 
