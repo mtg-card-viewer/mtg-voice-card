@@ -67,6 +67,7 @@ const cardImage = document.getElementById("card");
 
 let lastHeardText = "";
 let cardNamesCache = null;
+let foundMethod = "";
 
 const SpeechRecognition =
     window.SpeechRecognition ||
@@ -93,6 +94,7 @@ if (!SpeechRecognition) {
         clearTimeout(timeout);
 
         lastHeardText = "";
+        foundMethod = "";
 
         cardImage.style.display = "none";
 
@@ -278,7 +280,7 @@ async function getCardNames(){
 
 
 /* ==========================
-   Fuzzy match
+   Local fuzzy match
 ========================== */
 
 async function findClosestCard(spoken){
@@ -329,7 +331,7 @@ async function findBestCard(candidates){
     candidates =
         [...new Set(candidates)];
 
-    // Exact match first
+    // STEP 1 - Exact Match
 
     for(const candidate of candidates){
 
@@ -346,6 +348,8 @@ async function findBestCard(candidates){
                 const data =
                     await response.json();
 
+                foundMethod = "Exact Match";
+
                 showCard(
                     data,
                     data.name
@@ -359,7 +363,41 @@ async function findBestCard(candidates){
         }
     }
 
-    // Fuzzy match
+
+    // STEP 2 - Scryfall Fuzzy
+
+    for(const candidate of candidates){
+
+        try{
+
+            const response =
+                await fetch(
+                    "https://api.scryfall.com/cards/named?fuzzy=" +
+                    encodeURIComponent(candidate)
+                );
+
+            if(response.ok){
+
+                const data =
+                    await response.json();
+
+                foundMethod = "Scryfall Fuzzy";
+
+                showCard(
+                    data,
+                    data.name
+                );
+
+                return;
+            }
+
+        }catch(error){
+            console.error(error);
+        }
+    }
+
+
+    // STEP 3 - Local Fuzzy
 
     let bestMatch = null;
     let bestScore = 0;
@@ -394,6 +432,8 @@ async function findBestCard(candidates){
                 const data =
                     await response.json();
 
+                foundMethod = "Local Fuzzy";
+
                 showCard(
                     data,
                     bestMatch.name
@@ -423,6 +463,7 @@ function showCard(data, matchedName){
 
     result.textContent =
         "Heard: " + lastHeardText +
+        "\nFound by: " + foundMethod +
         "\nMatched: " + matchedName;
 
     let imageURL = null;
