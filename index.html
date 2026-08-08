@@ -108,11 +108,10 @@ button:disabled{
 
 
 /* =========================================================
-   FULLSCREEN CARD OVERLAY
+   FULLSCREEN CARD
 ========================================================= */
 
 #cardView{
-
     display:none;
 
     position:fixed;
@@ -141,16 +140,7 @@ button:disabled{
         env(safe-area-inset-left);
 }
 
-
-/*
-   Card is allowed to use the complete
-   available screen.
-
-   It will never be cropped.
-*/
-
 #fullscreenCard{
-
     display:block;
 
     max-width:100%;
@@ -162,13 +152,7 @@ button:disabled{
     object-fit:contain;
 
     margin:0;
-
 }
-
-
-/*
-   Prevent the page behind the card from scrolling.
-*/
 
 body.cardMode{
     overflow:hidden;
@@ -543,12 +527,6 @@ function startListening(){
     }
 
 
-    /*
-       Close fullscreen card if one is shown.
-       This does NOT reload the page and does NOT
-       request microphone permission again.
-    */
-
     closeCardView();
 
 
@@ -557,11 +535,18 @@ function startListening(){
 
     /*
        Improvement 5:
-       Clear the card search field when a new
-       card search starts.
+       Clear card search field.
     */
 
     manualInput.value = "";
+
+
+    /*
+       Improvement 5:
+       Clear keyword search field.
+    */
+
+    keywordInput.value = "";
 
 
     searchCancelled = true;
@@ -598,10 +583,6 @@ function startListening(){
 
     }
 
-
-    /*
-       Listening lasts a maximum of 3 seconds.
-    */
 
     timeout =
         setTimeout(
@@ -1452,10 +1433,6 @@ function showCard(
     }
 
 
-    /*
-       Only English cards.
-    */
-
     if(data.lang !== "en"){
 
         console.error(
@@ -1505,12 +1482,6 @@ function showCard(
     }
 
 
-    /*
-       Improvement 6:
-       Put only the card into a fullscreen overlay.
-       The normal page itself is NOT hidden.
-    */
-
     fullscreenCard.src =
         imageURL;
 
@@ -1540,11 +1511,6 @@ function closeCardView(){
         "cardMode"
     );
 
-
-    /*
-       Remove the image source so the next card
-       starts cleanly.
-    */
 
     fullscreenCard.removeAttribute(
         "src"
@@ -1606,10 +1572,12 @@ function manualSearch(){
 
     /*
        Improvement 5:
-       Clear the card input immediately.
+       Clear both search fields.
     */
 
     manualInput.value = "";
+
+    keywordInput.value = "";
 
 
     closeCardView();
@@ -1794,6 +1762,157 @@ async function findKeywordType(
 
 
 /* =========================================================
+   ABILITY WORD DEFINITIONS
+=========================================================
+
+   Ability words do not have one fixed rules meaning.
+   Therefore we do NOT take random reminder text from
+   cards. Instead we provide a general explanation.
+
+========================================================= */
+
+const abilityWordDefinitions = {
+
+    "ferocious":
+        "An ability word for abilities that get a bonus or have an additional effect if you control a creature with power 4 or greater. Each ferocious ability works differently, so read the ability carefully.",
+
+    "landfall":
+        "An ability word for abilities that trigger or get a bonus whenever a land enters the battlefield under your control. Each landfall ability works differently.",
+
+    "morbid":
+        "An ability word for abilities that care about whether a creature has died this turn. Each morbid ability works differently.",
+
+    "metalcraft":
+        "An ability word for abilities that get a bonus or have an additional effect if you control three or more artifacts. Each metalcraft ability works differently.",
+
+    "spell mastery":
+        "An ability word for abilities that get a bonus if there are two or more instant and/or sorcery cards in your graveyard. Each spell mastery ability works differently.",
+
+    "delirium":
+        "An ability word for abilities that get a bonus if there are four or more card types among cards in your graveyard. Each delirium ability works differently.",
+
+    "revolt":
+        "An ability word for abilities that get a bonus if a permanent you controlled left the battlefield this turn. Each revolt ability works differently.",
+
+    "raid":
+        "An ability word for abilities that get a bonus if you attacked with a creature this turn. Each raid ability works differently.",
+
+    "formidable":
+        "An ability word for abilities that get a bonus if the total power of creatures you control is 8 or greater. Each formidable ability works differently.",
+
+    "battalion":
+        "An ability word for abilities that trigger or get a bonus when you attack with three or more creatures. Each battalion ability works differently.",
+
+    "bloodrush":
+        "An ability word associated with abilities that allow a creature card to be discarded to give an attacking creature a temporary bonus or effect. Each bloodrush ability works differently.",
+
+    "heroic":
+        "An ability word for abilities that trigger whenever you cast a spell that targets the creature with the heroic ability. Each heroic ability has its own effect.",
+
+    "inspired":
+        "An ability word for abilities that trigger when a creature becomes untapped. Each inspired ability works differently.",
+
+    "constellation":
+        "An ability word for abilities that trigger whenever an enchantment enters the battlefield under your control. Each constellation ability works differently.",
+
+    "prowess":
+        "An ability word for abilities that trigger whenever you cast a noncreature spell. Each prowess ability can have its own effect.",
+
+    "ascend":
+        "An ability word associated with the city's blessing. If you have the city's blessing, certain cards get additional effects or abilities.",
+
+    "threshold":
+        "An ability word for abilities that get a bonus when you have seven or more cards in your graveyard. Each threshold ability works differently.",
+
+    "hellbent":
+        "An ability word for abilities that get a bonus if you have no cards in your hand. Each hellbent ability works differently.",
+
+    "ferocious":
+        "An ability word for abilities that get a bonus or additional effect if you control a creature with power 4 or greater. Each ferocious ability works differently.",
+
+    "pack tactics":
+        "An ability word for abilities that trigger when you attack with creatures whose total power is 6 or greater. Each pack tactics ability works differently.",
+
+    "enrage":
+        "An ability word for abilities that trigger when a creature with the ability is dealt damage. Each enrage ability works differently.",
+
+    "exploit":
+        "An ability word for abilities that trigger when a creature enters the battlefield and allow you to sacrifice a creature for an additional effect.",
+
+    "outlast":
+        "An ability word associated with an activated ability that lets a creature tap and receive a +1/+1 counter. The ability can normally be activated only as a sorcery.",
+
+    "unleash":
+        "An ability word associated with a choice made as a creature enters the battlefield: it can enter with a +1/+1 counter, but then it cannot block.",
+
+    "soulbond":
+        "An ability word associated with abilities that pair two creatures. While paired, each creature can grant an ability or bonus to the other.",
+
+    "bloodthirst":
+        "An ability word for creatures and abilities that get a bonus if an opponent was dealt damage this turn. The amount of the bonus depends on the card.",
+
+    "metalcraft":
+        "An ability word for abilities that get a bonus or additional effect if you control three or more artifacts.",
+
+    "domain":
+        "An ability word for abilities whose effect depends on the number of basic land types among lands you control.",
+
+    "sneak":
+        "An ability word used on some abilities that reward attacking with creatures that entered the battlefield this turn. The exact effect is defined by the card.",
+
+    "pack tactics":
+        "An ability word for abilities that trigger when you attack with creatures with total power 6 or greater. Each ability defines its own effect."
+
+};
+
+
+/* =========================================================
+   ABILITY WORD EXPLANATION
+========================================================= */
+
+function getAbilityWordDefinition(
+    keyword
+){
+
+    const normalized =
+        normalizeText(keyword);
+
+
+    if(
+        abilityWordDefinitions[
+            normalized
+        ]
+    ){
+
+        return abilityWordDefinitions[
+            normalized
+        ];
+
+    }
+
+
+    /*
+       Important fallback.
+
+       If Scryfall tells us that the word is an
+       ability word but we do not yet have a
+       specific definition above, NEVER use
+       random reminder text from a card.
+
+       Instead give a safe generic explanation.
+    */
+
+    return (
+        "An ability word used to group abilities " +
+        "that share a particular theme or condition. " +
+        "Ability words have no rules meaning by themselves; " +
+        "the actual effect is defined by the ability that follows the word."
+    );
+
+}
+
+
+/* =========================================================
    EXTRACT REMINDER TEXT
 ========================================================= */
 
@@ -1831,6 +1950,12 @@ function extractReminderText(
             normalizeText(line);
 
 
+        /*
+           Do NOT use this for ability words.
+           It is only useful for keyword abilities
+           and keyword actions.
+        */
+
         if(
             normalizedLine.includes(
                 normalizedKeyword
@@ -1854,38 +1979,6 @@ function extractReminderText(
     }
 
 
-    const matches =
-        oracleText.match(
-            /\(([^()]*)\)/g
-        );
-
-
-    if(matches){
-
-        for(
-            const match of matches
-        ){
-
-            const clean =
-                match
-                .slice(1,-1)
-                .trim();
-
-
-            if(
-                normalizeText(clean)
-                .includes(normalizedKeyword)
-            ){
-
-                return clean;
-
-            }
-
-        }
-
-    }
-
-
     return null;
 
 }
@@ -1896,7 +1989,8 @@ function extractReminderText(
 ========================================================= */
 
 async function getKeywordDescription(
-    keyword
+    keyword,
+    keywordType
 ){
 
     if(searchCancelled){
@@ -1905,6 +1999,39 @@ async function getKeywordDescription(
 
     }
 
+
+    /*
+       =====================================================
+       ABILITY WORD
+       =====================================================
+
+       NEVER search random card reminder text for these.
+    */
+
+    if(
+        keywordType ===
+        "Ability Word"
+    ){
+
+        return {
+
+            description:
+                getAbilityWordDefinition(
+                    keyword
+                ),
+
+            sourceCard:null
+
+        };
+
+    }
+
+
+    /*
+       =====================================================
+       KEYWORD ABILITY / KEYWORD ACTION
+       =====================================================
+    */
 
     const query =
         "keyword:" +
@@ -1949,6 +2076,11 @@ async function getKeywordDescription(
 
         }
 
+
+        /*
+           Look through English cards and find
+           actual reminder text.
+        */
 
         for(
             const card of data.data
@@ -2041,7 +2173,7 @@ async function searchKeyword(){
 
     /*
        Improvement 5:
-       Clear keyword input immediately.
+       Clear keyword field immediately.
     */
 
     keywordInput.value = "";
@@ -2081,6 +2213,11 @@ async function searchKeyword(){
     searchCancelled = false;
 
 
+    /*
+       First determine exactly what kind of
+       Scryfall keyword we are dealing with.
+    */
+
     const keywordType =
         await findKeywordType(
             keyword
@@ -2118,13 +2255,24 @@ async function searchKeyword(){
     }
 
 
-    keywordDescription.textContent =
-        "Searching Scryfall...";
+    /*
+       Show the type as part of the result.
+    */
 
+    keywordTitle.textContent =
+        keyword +
+        " — " +
+        keywordType;
+
+
+    /*
+       Get the correct explanation.
+    */
 
     const information =
         await getKeywordDescription(
-            keyword
+            keyword,
+            keywordType
         );
 
 
@@ -2133,10 +2281,6 @@ async function searchKeyword(){
         return;
 
     }
-
-
-    keywordTitle.textContent =
-        keyword;
 
 
     if(information){
@@ -2148,10 +2292,14 @@ async function searchKeyword(){
     else{
 
         keywordDescription.textContent =
-            "No English reminder text was found for this keyword.";
+            "No English explanation was found.";
 
     }
 
+
+    /*
+       Scroll directly to the explanation.
+    */
 
     keywordResult.scrollIntoView({
 
