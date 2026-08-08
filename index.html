@@ -74,6 +74,46 @@ button:disabled{
 #manualButton{
     margin-top:10px;
 }
+
+#keywordSection{
+    width:90%;
+    max-width:500px;
+    margin-top:30px;
+}
+
+#keywordInput{
+    box-sizing:border-box;
+    width:100%;
+    font-size:20px;
+    padding:14px;
+    border-radius:10px;
+    border:none;
+    text-align:center;
+}
+
+#keywordButton{
+    margin-top:10px;
+}
+
+#keywordResult{
+    margin-top:20px;
+    font-size:20px;
+    line-height:1.5;
+    text-align:left;
+    white-space:pre-line;
+    scroll-margin-top:20px;
+}
+
+#keywordTitle{
+    font-size:24px;
+    font-weight:bold;
+    margin-bottom:12px;
+    text-align:center;
+}
+
+#keywordDescription{
+    font-size:20px;
+}
 </style>
 
 </head>
@@ -111,6 +151,38 @@ button:disabled{
 
 </div>
 
+<!-- =======================================================
+     KEYWORD SEARCH
+======================================================= -->
+
+<div id="keywordSection">
+
+```
+<input
+    id="keywordInput"
+    type="text"
+    placeholder="Keyword: haste, scry, connive..."
+    autocomplete="off"
+    autocorrect="off"
+    autocapitalize="off"
+    spellcheck="false"
+>
+
+<button id="keywordButton">
+    📖 Explain keyword
+</button>
+
+<div id="keywordResult">
+
+    <div id="keywordTitle"></div>
+
+    <div id="keywordDescription"></div>
+
+</div>
+```
+
+</div>
+
 <script>
 
 const button =
@@ -130,6 +202,21 @@ const manualInput =
 
 const manualButton =
     document.getElementById("manualButton");
+
+const keywordInput =
+    document.getElementById("keywordInput");
+
+const keywordButton =
+    document.getElementById("keywordButton");
+
+const keywordResult =
+    document.getElementById("keywordResult");
+
+const keywordTitle =
+    document.getElementById("keywordTitle");
+
+const keywordDescription =
+    document.getElementById("keywordDescription");
 
 
 let lastHeardText = "";
@@ -311,6 +398,14 @@ function startListening(){
 
     clearTimeout(timeout);
 
+    /*
+       Improvement 3:
+       Clear the manual card-name field whenever
+       a new card search starts.
+    */
+
+    manualInput.value = "";
+
     searchCancelled = true;
     isSearching = false;
 
@@ -325,8 +420,7 @@ function startListening(){
     button.disabled = true;
 
     /*
-       Tijdens de maximaal 3 seconden inspreken
-       is Stop uitgeschakeld.
+       Stop is only for the search phase.
     */
 
     stopButton.disabled = true;
@@ -523,11 +617,6 @@ async function getEnglishCard(cardName){
     }
 
     try{
-
-        /*
-           Search Scryfall specifically for an English
-           printing of this exact card name.
-        */
 
         const query =
             '!"' +
@@ -752,7 +841,7 @@ async function findPhoneticCard(
 
 
 /* =========================================================
-   MAIN SEARCH
+   MAIN CARD SEARCH
 ========================================================= */
 
 async function findBestCard(
@@ -779,11 +868,6 @@ async function findBestCard(
 
         try{
 
-            /*
-               First determine whether Scryfall recognizes
-               the spoken name exactly.
-            */
-
             const response =
                 await fetch(
                     "https://api.scryfall.com/cards/named?exact=" +
@@ -798,11 +882,6 @@ async function findBestCard(
 
                 const data =
                     await response.json();
-
-                /*
-                   Now explicitly retrieve the English
-                   printing of the recognized card.
-                */
 
                 const englishCard =
                     await getEnglishCard(
@@ -867,11 +946,6 @@ async function findBestCard(
 
                 const data =
                     await response.json();
-
-                /*
-                   Always replace the returned printing with
-                   an explicitly English printing.
-                */
 
                 const englishCard =
                     await getEnglishCard(
@@ -1056,8 +1130,8 @@ function showCard(
     }
 
     /*
-       Extra safety check:
-       Never display a non-English card.
+       Extra safety:
+       only English cards are allowed.
     */
 
     if(data.lang !== "en"){
@@ -1125,7 +1199,7 @@ function showCard(
 
 
 /* =========================================================
-   MANUAL SEARCH
+   MANUAL CARD SEARCH
 ========================================================= */
 
 manualButton.addEventListener(
@@ -1161,7 +1235,7 @@ function manualSearch(){
 
 
     /*
-       Cancel any current voice/search operation.
+       Cancel any current operation.
     */
 
     searchCancelled = true;
@@ -1174,6 +1248,14 @@ function manualSearch(){
     }
     catch(e){}
 
+
+    /*
+       Improvement 3:
+       The field is cleared immediately when
+       the new search starts.
+    */
+
+    manualInput.value = "";
 
     lastHeardText = "";
 
@@ -1197,6 +1279,512 @@ function manualSearch(){
     findBestCard(
         [text]
     );
+
+}
+
+
+/* =========================================================
+   KEYWORD CATALOGS
+========================================================= */
+
+let keywordAbilitiesCache = null;
+let keywordActionsCache = null;
+let abilityWordsCache = null;
+
+
+/* ---------------------------------------------------------
+   GET KEYWORD CATALOG
+--------------------------------------------------------- */
+
+async function getKeywordCatalog(
+    catalogName
+){
+
+    try{
+
+        const response =
+            await fetch(
+                "https://api.scryfall.com/catalog/" +
+                catalogName
+            );
+
+        if(!response.ok){
+            return null;
+        }
+
+        const data =
+            await response.json();
+
+        return data.data || null;
+
+    }
+    catch(error){
+
+        console.error(error);
+
+        return null;
+
+    }
+
+}
+
+
+/* =========================================================
+   FIND KEYWORD TYPE
+========================================================= */
+
+async function findKeywordType(
+    keyword
+){
+
+    const normalized =
+        normalizeText(keyword);
+
+    if(!normalized){
+        return null;
+    }
+
+
+    /*
+       Load the three useful Scryfall catalogs.
+       Ability words are included as an extra convenience.
+    */
+
+    if(!keywordAbilitiesCache){
+
+        keywordAbilitiesCache =
+            await getKeywordCatalog(
+                "keyword-abilities"
+            );
+
+    }
+
+    if(!keywordActionsCache){
+
+        keywordActionsCache =
+            await getKeywordCatalog(
+                "keyword-actions"
+            );
+
+    }
+
+    if(!abilityWordsCache){
+
+        abilityWordsCache =
+            await getKeywordCatalog(
+                "ability-words"
+            );
+
+    }
+
+
+    function matches(
+        list
+    ){
+
+        if(!list){
+            return false;
+        }
+
+        return list.some(
+            function(item){
+
+                return normalizeText(item) ===
+                    normalized;
+
+            }
+        );
+
+    }
+
+
+    if(matches(keywordAbilitiesCache)){
+
+        return "Keyword Ability";
+
+    }
+
+
+    if(matches(keywordActionsCache)){
+
+        return "Keyword Action";
+
+    }
+
+
+    if(matches(abilityWordsCache)){
+
+        return "Ability Word";
+
+    }
+
+
+    return null;
+}
+
+
+/* =========================================================
+   EXTRACT REMINDER TEXT
+========================================================= */
+
+function extractReminderText(
+    oracleText,
+    keyword
+){
+
+    if(!oracleText){
+        return null;
+    }
+
+
+    /*
+       Reminder text in Scryfall's oracle text is
+       enclosed in parentheses.
+
+       Example:
+
+       Haste
+       (This creature can attack and T as soon as it
+       comes under your control.)
+
+       We look for parenthetical text associated with
+       the requested keyword.
+    */
+
+    const lines =
+        oracleText.split("\n");
+
+
+    const normalizedKeyword =
+        normalizeText(keyword);
+
+
+    for(
+        let i=0;
+        i<lines.length;
+        i++
+    ){
+
+        const line =
+            lines[i];
+
+        const normalizedLine =
+            normalizeText(line);
+
+
+        if(
+            normalizedLine.includes(
+                normalizedKeyword
+            )
+        ){
+
+            const match =
+                line.match(
+                    /\(([^()]*)\)/
+                );
+
+            if(match){
+
+                return match[1].trim();
+
+            }
+
+        }
+
+    }
+
+
+    /*
+       Second attempt:
+       search the entire oracle text for parenthetical
+       reminder text.
+    */
+
+    const matches =
+        oracleText.match(
+            /\(([^()]*)\)/g
+        );
+
+
+    if(matches){
+
+        for(
+            const match of matches
+        ){
+
+            const clean =
+                match
+                .slice(1,-1)
+                .trim();
+
+            if(
+                normalizeText(clean)
+                .includes(normalizedKeyword)
+            ){
+
+                return clean;
+
+            }
+
+        }
+
+    }
+
+
+    return null;
+}
+
+
+/* =========================================================
+   GET KEYWORD DESCRIPTION FROM SCRYFALL
+========================================================= */
+
+async function getKeywordDescription(
+    keyword
+){
+
+    if(searchCancelled){
+        return null;
+    }
+
+
+    /*
+       Search English cards that actually have the
+       requested keyword.
+    */
+
+    const query =
+        'keyword:' +
+        keyword +
+        ' lang:en';
+
+
+    try{
+
+        const response =
+            await fetch(
+                "https://api.scryfall.com/cards/search?q=" +
+                encodeURIComponent(query) +
+                "&unique=cards"
+            );
+
+        if(searchCancelled){
+            return null;
+        }
+
+        if(!response.ok){
+
+            return null;
+
+        }
+
+
+        const data =
+            await response.json();
+
+
+        if(
+            !data.data ||
+            !data.data.length
+        ){
+
+            return null;
+
+        }
+
+
+        /*
+           Look through the first results for a card
+           containing actual reminder text.
+        */
+
+        for(
+            const card of data.data
+        ){
+
+            if(searchCancelled){
+                return null;
+            }
+
+            if(card.lang !== "en"){
+                continue;
+            }
+
+
+            const description =
+                extractReminderText(
+                    card.oracle_text,
+                    keyword
+                );
+
+
+            if(description){
+
+                return {
+                    description:description,
+                    sourceCard:card.name
+                };
+
+            }
+
+        }
+
+    }
+    catch(error){
+
+        console.error(error);
+
+    }
+
+
+    return null;
+}
+
+
+/* =========================================================
+   KEYWORD SEARCH
+========================================================= */
+
+keywordButton.addEventListener(
+    "click",
+    searchKeyword
+);
+
+
+keywordInput.addEventListener(
+    "keydown",
+    function(event){
+
+        if(event.key === "Enter"){
+
+            searchKeyword();
+
+        }
+
+    }
+);
+
+
+async function searchKeyword(){
+
+    const keyword =
+        keywordInput.value.trim();
+
+    if(!keyword){
+
+        return;
+
+    }
+
+
+    /*
+       Cancel any card search.
+    */
+
+    searchCancelled = true;
+    isSearching = false;
+
+    try{
+
+        if(recognition){
+
+            recognition.abort();
+
+        }
+
+    }
+    catch(e){}
+
+
+    stopButton.disabled = true;
+
+
+    keywordTitle.textContent =
+        "";
+
+    keywordDescription.textContent =
+        "Searching...";
+
+
+    /*
+       Start a new keyword operation.
+    */
+
+    searchCancelled = false;
+
+
+    const keywordType =
+        await findKeywordType(
+            keyword
+        );
+
+
+    if(searchCancelled){
+        return;
+    }
+
+
+    if(!keywordType){
+
+        keywordTitle.textContent =
+            keyword;
+
+        keywordDescription.textContent =
+            "Keyword not found.";
+
+        keywordResult.scrollIntoView({
+            behavior:"smooth",
+            block:"start"
+        });
+
+        return;
+
+    }
+
+
+    keywordDescription.textContent =
+        "Searching Scryfall...";
+
+
+    const information =
+        await getKeywordDescription(
+            keyword
+        );
+
+
+    if(searchCancelled){
+        return;
+    }
+
+
+    keywordTitle.textContent =
+        keyword;
+
+
+    if(information){
+
+        keywordDescription.textContent =
+            information.description;
+
+    }
+    else{
+
+        keywordDescription.textContent =
+            "No English reminder text was found for this keyword.";
+
+    }
+
+
+    /*
+       Improvement 4:
+       Automatically move the page to the
+       explanation so it is immediately readable.
+    */
+
+    keywordResult.scrollIntoView({
+        behavior:"smooth",
+        block:"start"
+    });
 
 }
 
