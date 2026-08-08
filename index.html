@@ -677,28 +677,13 @@ function startListening(){
 
     }
 
-
     closeCardView();
-
 
     clearTimeout(timeout);
 
-
-    /*
-       Improvement 5:
-       Clear card search field.
-    */
-
     manualInput.value = "";
 
-
-    /*
-       Improvement 5:
-       Clear keyword search field.
-    */
-
     keywordInput.value = "";
-
 
     searchCancelled = true;
 
@@ -706,30 +691,16 @@ function startListening(){
 
     lastHeardText = "";
 
-
-    /*
-       Important:
-       The progress bar is NOT started here.
-
-       We wait for recognition.onstart so the visual
-       timer starts when SpeechRecognition actually
-       reports that it has started.
-    */
-
-    stopListenProgress();
-
-
-    result.textContent =
-        "🎤 Starting microphone...";
-
-
     button.disabled = true;
 
     stopButton.disabled = true;
 
-
     searchCancelled = false;
 
+    /*
+       Start speech recognition immediately.
+       Safari now gets 1 second to wake up.
+    */
 
     try{
 
@@ -740,16 +711,65 @@ function startListening(){
 
         console.log(error);
 
-        stopListenProgress();
-
         button.disabled = false;
 
         stopButton.disabled = true;
 
+        return;
+
     }
 
-}
+    /*
+       Give Safari time to activate the
+       speech engine before the user speaks.
+    */
 
+    result.textContent =
+        "🎤 Get ready...";
+
+    setTimeout(function(){
+
+        if(searchCancelled){
+
+            return;
+
+        }
+
+        result.textContent =
+            "🎤 Speak now";
+
+        stopButton.disabled = false;
+
+        /*
+           If you already added the recording
+           progress bar, keep this line.
+           Otherwise remove it.
+        */
+
+        if(typeof startRecordingBar === "function"){
+
+            startRecordingBar();
+
+        }
+
+        timeout =
+            setTimeout(
+                function(){
+
+                    try{
+
+                        recognition.stop();
+
+                    }
+                    catch(e){}
+
+                },
+                3000
+            );
+
+    },1000);
+
+}
 
 /* =========================================================
    STOP SEARCH
