@@ -106,11 +106,6 @@ button:disabled{
     font-size:20px;
 }
 
-
-/* =========================================================
-   FULLSCREEN CARD
-========================================================= */
-
 #cardView{
     display:none;
 
@@ -164,10 +159,6 @@ body.cardMode{
 
 <body>
 
-<!-- =======================================================
-     MAIN INTERFACE
-======================================================= -->
-
 <div id="mainInterface">
 
 ```
@@ -189,10 +180,6 @@ body.cardMode{
 </div>
 
 
-<!-- ===================================================
-     CARD SEARCH
-=================================================== -->
-
 <div id="manual">
 
     <input
@@ -212,10 +199,6 @@ body.cardMode{
 
 </div>
 
-
-<!-- ===================================================
-     KEYWORD SEARCH
-=================================================== -->
 
 <div id="keywordSection">
 
@@ -247,10 +230,6 @@ body.cardMode{
 ```
 
 </div>
-
-<!-- =======================================================
-     FULLSCREEN CARD
-======================================================= -->
 
 <div id="cardView">
 
@@ -408,6 +387,12 @@ else{
             const candidates = [];
 
 
+            /*
+               Improvement 8:
+               Use ALL speech alternatives,
+               not just alternative 1.
+            */
+
             for(
                 let i=0;
                 i<event.results[0].length;
@@ -420,7 +405,12 @@ else{
                     .trim();
 
 
-                if(transcript){
+                if(
+                    transcript &&
+                    !candidates.includes(
+                        transcript
+                    )
+                ){
 
                     candidates.push(
                         transcript
@@ -644,6 +634,33 @@ function normalizeText(text){
 
 
 /* =========================================================
+   COMPACT NORMALIZATION
+=========================================================
+
+   Improvement 8:
+   Removes spaces and punctuation.
+
+   Example:
+
+   "Wisp mayor"
+        ↓
+   "wispmayor"
+
+   "Wisp-mare"
+        ↓
+   "wispmare"
+
+========================================================= */
+
+function compactText(text){
+
+    return normalizeText(text)
+        .replace(/\s+/g,"");
+
+}
+
+
+/* =========================================================
    LEVENSHTEIN
 ========================================================= */
 
@@ -738,6 +755,485 @@ function similarity(a,b){
 
     return 1 -
         distance / longest;
+
+}
+
+
+/* =========================================================
+   COMPACT SIMILARITY
+=========================================================
+
+   Improvement 8.
+
+   This is the important part for cases such as:
+
+       Wisp mayor
+       Wish mayor
+
+   compared against:
+
+       Wispmare
+
+========================================================= */
+
+function compactSimilarity(a,b){
+
+    a =
+        compactText(a);
+
+    b =
+        compactText(b);
+
+
+    if(!a || !b){
+
+        return 0;
+
+    }
+
+
+    if(a === b){
+
+        return 1;
+
+    }
+
+
+    const distance =
+        levenshtein(a,b);
+
+
+    const longest =
+        Math.max(
+            a.length,
+            b.length
+        );
+
+
+    return 1 -
+        distance / longest;
+
+}
+
+
+/* =========================================================
+   PHONETIC NORMALIZATION
+========================================================= */
+
+function phoneticNormalize(text){
+
+    let s =
+        normalizeText(text);
+
+
+    s =
+        s
+        .replace(/ph/g,"f")
+        .replace(/th/g,"t")
+        .replace(/wh/g,"w")
+        .replace(/ck/g,"k")
+        .replace(/qu/g,"kw")
+        .replace(/c(?=[eiy])/g,"s")
+        .replace(/c/g,"k")
+        .replace(/q/g,"k")
+        .replace(/x/g,"ks")
+        .replace(/z/g,"s")
+        .replace(/j/g,"y")
+        .replace(/ae/g,"a")
+        .replace(/oe/g,"o")
+        .replace(/ee/g,"i")
+        .replace(/oo/g,"u")
+        .replace(/ou/g,"u");
+
+
+    s =
+        s.replace(
+            /(.)\1+/g,
+            "$1"
+        );
+
+
+    return s;
+
+}
+
+
+/* =========================================================
+   COMPACT PHONETIC NORMALIZATION
+========================================================= */
+
+function compactPhoneticNormalize(text){
+
+    return phoneticNormalize(text)
+        .replace(/\s+/g,"");
+
+}
+
+
+/* =========================================================
+   PHONETIC SCORE
+========================================================= */
+
+function phoneticSimilarity(a,b){
+
+    return similarity(
+        phoneticNormalize(a),
+        phoneticNormalize(b)
+    );
+
+}
+
+
+/* =========================================================
+   COMPACT PHONETIC SCORE
+=========================================================
+
+   Improvement 8.
+
+   "Wisp mayor"
+        ↓
+   "wispmayor"
+
+   versus
+
+   "Wispmare"
+        ↓
+   "wispmare"
+
+========================================================= */
+
+function compactPhoneticSimilarity(a,b){
+
+    a =
+        compactPhoneticNormalize(a);
+
+    b =
+        compactPhoneticNormalize(b);
+
+
+    if(!a || !b){
+
+        return 0;
+
+    }
+
+
+    if(a === b){
+
+        return 1;
+
+    }
+
+
+    const distance =
+        levenshtein(a,b);
+
+
+    const longest =
+        Math.max(
+            a.length,
+            b.length
+        );
+
+
+    return 1 -
+        distance / longest;
+
+}
+
+
+/* =========================================================
+   WORD SCORE
+=========================================================
+
+   Improvement 8.
+
+   Compares individual spoken words against
+   individual words in the card name.
+
+   This helps when speech recognition introduces
+   spaces into a single card name.
+
+========================================================= */
+
+function wordSimilarityScore(
+    spoken,
+    cardName
+){
+
+    const spokenWords =
+        normalizeText(
+            spoken
+        ).split(" ")
+        .filter(Boolean);
+
+
+    const cardWords =
+        normalizeText(
+            cardName
+        ).split(" ")
+        .filter(Boolean);
+
+
+    if(
+        !spokenWords.length ||
+        !cardWords.length
+    ){
+
+        return 0;
+
+    }
+
+
+    let total = 0;
+
+    let matches = 0;
+
+
+    for(
+        const spokenWord of spokenWords
+    ){
+
+        let best = 0;
+
+
+        for(
+            const cardWord of cardWords
+        ){
+
+            const score =
+                similarity(
+                    spokenWord,
+                    cardWord
+                );
+
+
+            if(score > best){
+
+                best = score;
+
+            }
+
+        }
+
+
+        total += best;
+
+        matches++;
+
+    }
+
+
+    if(!matches){
+
+        return 0;
+
+    }
+
+
+    return total / matches;
+
+}
+
+
+/* =========================================================
+   PREFIX / SUFFIX SUPPORT
+=========================================================
+
+   Helps when speech recognition slightly changes
+   the beginning or ending of a word.
+
+========================================================= */
+
+function partialWordScore(
+    spoken,
+    cardName
+){
+
+    const a =
+        compactText(spoken);
+
+    const b =
+        compactText(cardName);
+
+
+    if(!a || !b){
+
+        return 0;
+
+    }
+
+
+    const minLength =
+        Math.min(
+            a.length,
+            b.length
+        );
+
+
+    if(minLength < 4){
+
+        return 0;
+
+    }
+
+
+    let prefix = 0;
+
+
+    while(
+        prefix < minLength &&
+        a[prefix] === b[prefix]
+    ){
+
+        prefix++;
+
+    }
+
+
+    let suffix = 0;
+
+
+    while(
+        suffix < minLength &&
+        a[a.length - 1 - suffix] ===
+        b[b.length - 1 - suffix]
+    ){
+
+        suffix++;
+
+    }
+
+
+    const prefixScore =
+        prefix / minLength;
+
+
+    const suffixScore =
+        suffix / minLength;
+
+
+    return Math.max(
+        prefixScore,
+        suffixScore
+    );
+
+}
+
+
+/* =========================================================
+   CARD NAME SCORE
+=========================================================
+
+   Improvement 8 — MAIN MATCHER.
+
+   Instead of relying on one similarity method,
+   combine several independent ways of interpreting
+   the spoken name.
+
+========================================================= */
+
+function cardNameScore(
+    spoken,
+    cardName
+){
+
+    if(!spoken || !cardName){
+
+        return 0;
+
+    }
+
+
+    /*
+       1. Normal full-string similarity
+    */
+
+    const normal =
+        similarity(
+            spoken,
+            cardName
+        );
+
+
+    /*
+       2. Ignore spaces.
+    */
+
+    const compact =
+        compactSimilarity(
+            spoken,
+            cardName
+        );
+
+
+    /*
+       3. Normal phonetic.
+    */
+
+    const phonetic =
+        phoneticSimilarity(
+            spoken,
+            cardName
+        );
+
+
+    /*
+       4. Phonetic without spaces.
+    */
+
+    const compactPhonetic =
+        compactPhoneticSimilarity(
+            spoken,
+            cardName
+        );
+
+
+    /*
+       5. Individual words.
+    */
+
+    const words =
+        wordSimilarityScore(
+            spoken,
+            cardName
+        );
+
+
+    /*
+       6. Beginning / ending.
+    */
+
+    const partial =
+        partialWordScore(
+            spoken,
+            cardName
+        );
+
+
+    /*
+       Weighted combination.
+
+       Compact matching gets a strong weight because
+       it specifically addresses speech recognition
+       adding/removing spaces.
+
+       We still keep the other methods so that normal
+       names are not disadvantaged.
+    */
+
+    const score =
+        (
+            normal * 0.20 +
+            compact * 0.30 +
+            phonetic * 0.15 +
+            compactPhonetic * 0.20 +
+            words * 0.10 +
+            partial * 0.05
+        );
+
+
+    return score;
 
 }
 
@@ -878,6 +1374,10 @@ async function getEnglishCard(
 
 /* =========================================================
    LOCAL FUZZY
+=========================================================
+
+   Improvement 8:
+   Uses the new multi-factor cardNameScore().
 ========================================================= */
 
 async function findClosestCard(
@@ -912,7 +1412,7 @@ async function findClosestCard(
 
 
         const score =
-            similarity(
+            cardNameScore(
                 spoken,
                 cardName
             );
@@ -929,7 +1429,16 @@ async function findClosestCard(
     }
 
 
-    if(bestScore >= 0.82){
+    /*
+       Slightly lower threshold than the old
+       simple fuzzy matcher because the new score
+       combines several independent signals.
+
+       We still require a reasonably strong match
+       to avoid random cards.
+    */
+
+    if(bestScore >= 0.72){
 
         return {
 
@@ -948,57 +1457,93 @@ async function findClosestCard(
 
 
 /* =========================================================
-   PHONETIC NORMALIZATION
+   MULTI-ALTERNATIVE LOCAL SEARCH
+=========================================================
+
+   Improvement 8.
+
+   Every speech alternative is compared against
+   every card name.
+
+   The best combination wins.
+
 ========================================================= */
 
-function phoneticNormalize(text){
+async function findBestLocalMatch(
+    candidates
+){
 
-    let s =
-        normalizeText(text);
-
-
-    s =
-        s
-        .replace(/ph/g,"f")
-        .replace(/th/g,"t")
-        .replace(/wh/g,"w")
-        .replace(/ck/g,"k")
-        .replace(/qu/g,"kw")
-        .replace(/c(?=[eiy])/g,"s")
-        .replace(/c/g,"k")
-        .replace(/q/g,"k")
-        .replace(/x/g,"ks")
-        .replace(/z/g,"s")
-        .replace(/j/g,"y")
-        .replace(/ae/g,"a")
-        .replace(/oe/g,"o")
-        .replace(/ee/g,"i")
-        .replace(/oo/g,"u")
-        .replace(/ou/g,"u");
+    const cardNames =
+        await getCardNames();
 
 
-    s =
-        s.replace(
-            /(.)\1+/g,
-            "$1"
-        );
+    if(!cardNames){
+
+        return null;
+
+    }
 
 
-    return s;
+    let bestName = null;
 
-}
+    let bestScore = 0;
+
+    let bestSpoken = null;
 
 
-/* =========================================================
-   PHONETIC SCORE
-========================================================= */
+    for(
+        const candidate of candidates
+    ){
 
-function phoneticSimilarity(a,b){
+        for(
+            const cardName of cardNames
+        ){
 
-    return similarity(
-        phoneticNormalize(a),
-        phoneticNormalize(b)
-    );
+            if(searchCancelled){
+
+                return null;
+
+            }
+
+
+            const score =
+                cardNameScore(
+                    candidate,
+                    cardName
+                );
+
+
+            if(score > bestScore){
+
+                bestScore = score;
+
+                bestName = cardName;
+
+                bestSpoken = candidate;
+
+            }
+
+        }
+
+    }
+
+
+    if(bestScore >= 0.72){
+
+        return {
+
+            name:bestName,
+
+            score:bestScore,
+
+            spoken:bestSpoken
+
+        };
+
+    }
+
+
+    return null;
 
 }
 
@@ -1026,6 +1571,8 @@ async function findPhoneticCard(
 
     let bestScore = 0;
 
+    let bestSpoken = null;
+
 
     for(
         const candidate of candidates
@@ -1042,10 +1589,29 @@ async function findPhoneticCard(
             }
 
 
-            const score =
+            /*
+               Improvement 8:
+               Use compact phonetic comparison too.
+            */
+
+            const normalScore =
                 phoneticSimilarity(
                     candidate,
                     cardName
+                );
+
+
+            const compactScore =
+                compactPhoneticSimilarity(
+                    candidate,
+                    cardName
+                );
+
+
+            const score =
+                Math.max(
+                    normalScore,
+                    compactScore
                 );
 
 
@@ -1054,6 +1620,8 @@ async function findPhoneticCard(
                 bestScore = score;
 
                 bestName = cardName;
+
+                bestSpoken = candidate;
 
             }
 
@@ -1065,17 +1633,20 @@ async function findPhoneticCard(
     console.log(
         "Phonetic:",
         bestName,
-        bestScore
+        bestScore,
+        bestSpoken
     );
 
 
-    if(bestScore >= 0.78){
+    if(bestScore >= 0.74){
 
         return {
 
             name:bestName,
 
-            score:bestScore
+            score:bestScore,
+
+            spoken:bestSpoken
 
         };
 
@@ -1261,7 +1832,7 @@ async function findBestCard(
 
 
     /* -----------------------------------------------------
-       3. LOCAL FUZZY
+       3. IMPROVED LOCAL MATCH
     ----------------------------------------------------- */
 
     result.textContent =
@@ -1270,47 +1841,38 @@ async function findBestCard(
         "\nTrying Local Fuzzy...";
 
 
-    let bestMatch = null;
+    /*
+       Improvement 8:
+       Use all speech alternatives together.
+    */
 
-    let bestScore = 0;
-
-
-    for(
-        const candidate of candidates
-    ){
-
-        const match =
-            await findClosestCard(
-                candidate
-            );
+    const localMatch =
+        await findBestLocalMatch(
+            candidates
+        );
 
 
-        if(searchCancelled){
+    if(searchCancelled){
 
-            return;
-
-        }
-
-
-        if(
-            match &&
-            match.score > bestScore
-        ){
-
-            bestMatch = match;
-
-            bestScore = match.score;
-
-        }
+        return;
 
     }
 
 
-    if(bestMatch){
+    if(localMatch){
+
+        console.log(
+            "Local match:",
+            localMatch.name,
+            localMatch.score,
+            "from:",
+            localMatch.spoken
+        );
+
 
         const englishCard =
             await getEnglishCard(
-                bestMatch.name
+                localMatch.name
             );
 
 
@@ -1763,12 +2325,6 @@ async function findKeywordType(
 
 /* =========================================================
    ABILITY WORD DEFINITIONS
-=========================================================
-
-   Ability words do not have one fixed rules meaning.
-   Therefore we do NOT take random reminder text from
-   cards. Instead we provide a general explanation.
-
 ========================================================= */
 
 const abilityWordDefinitions = {
@@ -1827,17 +2383,11 @@ const abilityWordDefinitions = {
     "hellbent":
         "An ability word for abilities that get a bonus if you have no cards in your hand. Each hellbent ability works differently.",
 
-    "ferocious":
-        "An ability word for abilities that get a bonus or additional effect if you control a creature with power 4 or greater. Each ferocious ability works differently.",
-
     "pack tactics":
         "An ability word for abilities that trigger when you attack with creatures whose total power is 6 or greater. Each pack tactics ability works differently.",
 
     "enrage":
         "An ability word for abilities that trigger when a creature with the ability is dealt damage. Each enrage ability works differently.",
-
-    "exploit":
-        "An ability word for abilities that trigger when a creature enters the battlefield and allow you to sacrifice a creature for an additional effect.",
 
     "outlast":
         "An ability word associated with an activated ability that lets a creature tap and receive a +1/+1 counter. The ability can normally be activated only as a sorcery.",
@@ -1850,9 +2400,6 @@ const abilityWordDefinitions = {
 
     "bloodthirst":
         "An ability word for creatures and abilities that get a bonus if an opponent was dealt damage this turn. The amount of the bonus depends on the card.",
-
-    "metalcraft":
-        "An ability word for abilities that get a bonus or additional effect if you control three or more artifacts.",
 
     "domain":
         "An ability word for abilities whose effect depends on the number of basic land types among lands you control.",
@@ -1890,17 +2437,6 @@ function getAbilityWordDefinition(
 
     }
 
-
-    /*
-       Important fallback.
-
-       If Scryfall tells us that the word is an
-       ability word but we do not yet have a
-       specific definition above, NEVER use
-       random reminder text from a card.
-
-       Instead give a safe generic explanation.
-    */
 
     return (
         "An ability word used to group abilities " +
@@ -1950,12 +2486,6 @@ function extractReminderText(
             normalizeText(line);
 
 
-        /*
-           Do NOT use this for ability words.
-           It is only useful for keyword abilities
-           and keyword actions.
-        */
-
         if(
             normalizedLine.includes(
                 normalizedKeyword
@@ -2000,14 +2530,6 @@ async function getKeywordDescription(
     }
 
 
-    /*
-       =====================================================
-       ABILITY WORD
-       =====================================================
-
-       NEVER search random card reminder text for these.
-    */
-
     if(
         keywordType ===
         "Ability Word"
@@ -2026,12 +2548,6 @@ async function getKeywordDescription(
 
     }
 
-
-    /*
-       =====================================================
-       KEYWORD ABILITY / KEYWORD ACTION
-       =====================================================
-    */
 
     const query =
         "keyword:" +
@@ -2076,11 +2592,6 @@ async function getKeywordDescription(
 
         }
 
-
-        /*
-           Look through English cards and find
-           actual reminder text.
-        */
 
         for(
             const card of data.data
@@ -2171,11 +2682,6 @@ async function searchKeyword(){
     }
 
 
-    /*
-       Improvement 5:
-       Clear keyword field immediately.
-    */
-
     keywordInput.value = "";
 
 
@@ -2212,11 +2718,6 @@ async function searchKeyword(){
 
     searchCancelled = false;
 
-
-    /*
-       First determine exactly what kind of
-       Scryfall keyword we are dealing with.
-    */
 
     const keywordType =
         await findKeywordType(
@@ -2255,19 +2756,11 @@ async function searchKeyword(){
     }
 
 
-    /*
-       Show the type as part of the result.
-    */
-
     keywordTitle.textContent =
         keyword +
         " — " +
         keywordType;
 
-
-    /*
-       Get the correct explanation.
-    */
 
     const information =
         await getKeywordDescription(
@@ -2296,10 +2789,6 @@ async function searchKeyword(){
 
     }
 
-
-    /*
-       Scroll directly to the explanation.
-    */
 
     keywordResult.scrollIntoView({
 
