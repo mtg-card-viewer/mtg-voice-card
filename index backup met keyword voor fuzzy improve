@@ -1,0 +1,2317 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+<title>MTG Voice Card</title>
+
+<style>
+
+*{
+    box-sizing:border-box;
+}
+
+html,
+body{
+    margin:0;
+    padding:0;
+    background:#111;
+    color:white;
+    font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+}
+
+body{
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+}
+
+button{
+    font-size:22px;
+    padding:16px 24px;
+    border-radius:15px;
+    border:none;
+    background:white;
+    color:black;
+    margin:5px;
+}
+
+button:disabled{
+    opacity:.5;
+}
+
+#stopButton{
+    background:#d33;
+    color:white;
+}
+
+#result{
+    margin-top:20px;
+    font-size:20px;
+    max-width:90%;
+    white-space:pre-line;
+    min-height:70px;
+}
+
+#manual{
+    width:90%;
+    max-width:500px;
+    margin-top:30px;
+}
+
+#manualInput,
+#keywordInput{
+    box-sizing:border-box;
+    width:100%;
+    font-size:20px;
+    padding:14px;
+    border-radius:10px;
+    border:none;
+    text-align:center;
+}
+
+#manualButton,
+#keywordButton{
+    margin-top:10px;
+}
+
+#keywordSection{
+    width:90%;
+    max-width:500px;
+    margin-top:30px;
+}
+
+#keywordResult{
+    margin-top:20px;
+    font-size:20px;
+    line-height:1.5;
+    text-align:left;
+    white-space:pre-line;
+    scroll-margin-top:20px;
+}
+
+#keywordTitle{
+    font-size:24px;
+    font-weight:bold;
+    margin-bottom:12px;
+    text-align:center;
+}
+
+#keywordDescription{
+    font-size:20px;
+}
+
+
+/* =========================================================
+   FULLSCREEN CARD
+========================================================= */
+
+#cardView{
+    display:none;
+
+    position:fixed;
+
+    inset:0;
+
+    width:100vw;
+    height:100vh;
+
+    width:100dvw;
+    height:100dvh;
+
+    background:#111;
+
+    z-index:9999;
+
+    align-items:center;
+    justify-content:center;
+
+    overflow:hidden;
+
+    padding:
+        env(safe-area-inset-top)
+        env(safe-area-inset-right)
+        env(safe-area-inset-bottom)
+        env(safe-area-inset-left);
+}
+
+#fullscreenCard{
+    display:block;
+
+    max-width:100%;
+    max-height:100%;
+
+    width:auto;
+    height:auto;
+
+    object-fit:contain;
+
+    margin:0;
+}
+
+body.cardMode{
+    overflow:hidden;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<!-- =======================================================
+     MAIN INTERFACE
+======================================================= -->
+
+<div id="mainInterface">
+
+```
+<div>
+
+    <button id="listenButton">
+        🎤 Speak card name
+    </button>
+
+    <button id="stopButton" disabled>
+        ⏹ Stop
+    </button>
+
+</div>
+
+
+<div id="result">
+    Tap the button and say a Magic card name.
+</div>
+
+
+<!-- ===================================================
+     CARD SEARCH
+=================================================== -->
+
+<div id="manual">
+
+    <input
+        id="manualInput"
+        type="text"
+        placeholder="Type difficult card name..."
+        autocomplete="new-password"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+        data-form-type="other"
+    >
+
+    <button id="manualButton">
+        🔎 Search card
+    </button>
+
+</div>
+
+
+<!-- ===================================================
+     KEYWORD SEARCH
+=================================================== -->
+
+<div id="keywordSection">
+
+    <input
+        id="keywordInput"
+        type="text"
+        placeholder="Keyword: haste, scry, connive..."
+        autocomplete="new-password"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+        data-form-type="other"
+    >
+
+    <button id="keywordButton">
+        📖 Explain keyword
+    </button>
+
+
+    <div id="keywordResult">
+
+        <div id="keywordTitle"></div>
+
+        <div id="keywordDescription"></div>
+
+    </div>
+
+</div>
+```
+
+</div>
+
+<!-- =======================================================
+     FULLSCREEN CARD
+======================================================= -->
+
+<div id="cardView">
+
+```
+<img
+    id="fullscreenCard"
+    alt="Magic card"
+>
+```
+
+</div>
+
+<script>
+
+
+/* =========================================================
+   ELEMENTS
+========================================================= */
+
+const button =
+    document.getElementById(
+        "listenButton"
+    );
+
+const stopButton =
+    document.getElementById(
+        "stopButton"
+    );
+
+const result =
+    document.getElementById(
+        "result"
+    );
+
+const manualInput =
+    document.getElementById(
+        "manualInput"
+    );
+
+const manualButton =
+    document.getElementById(
+        "manualButton"
+    );
+
+const keywordInput =
+    document.getElementById(
+        "keywordInput"
+    );
+
+const keywordButton =
+    document.getElementById(
+        "keywordButton"
+    );
+
+const keywordResult =
+    document.getElementById(
+        "keywordResult"
+    );
+
+const keywordTitle =
+    document.getElementById(
+        "keywordTitle"
+    );
+
+const keywordDescription =
+    document.getElementById(
+        "keywordDescription"
+    );
+
+const cardView =
+    document.getElementById(
+        "cardView"
+    );
+
+const fullscreenCard =
+    document.getElementById(
+        "fullscreenCard"
+    );
+
+
+/* =========================================================
+   VARIABLES
+========================================================= */
+
+let lastHeardText = "";
+
+let cardNamesCache = null;
+
+let recognition = null;
+
+let timeout = null;
+
+let searchCancelled = false;
+
+let isSearching = false;
+
+let keywordAbilitiesCache = null;
+
+let keywordActionsCache = null;
+
+let abilityWordsCache = null;
+
+
+/* =========================================================
+   SPEECH RECOGNITION
+========================================================= */
+
+const SpeechRecognition =
+    window.SpeechRecognition ||
+    window.webkitSpeechRecognition;
+
+
+if(!SpeechRecognition){
+
+    result.textContent =
+        "Speech recognition is not supported.";
+
+}
+else{
+
+    recognition =
+        new SpeechRecognition();
+
+    recognition.lang =
+        "en-US";
+
+    recognition.continuous =
+        false;
+
+    recognition.interimResults =
+        false;
+
+    recognition.maxAlternatives =
+        5;
+
+
+    button.addEventListener(
+        "click",
+        startListening
+    );
+
+
+    stopButton.addEventListener(
+        "click",
+        stopSearch
+    );
+
+
+    recognition.onresult =
+        async function(event){
+
+            clearTimeout(timeout);
+
+
+            const candidates = [];
+
+
+            for(
+                let i=0;
+                i<event.results[0].length;
+                i++
+            ){
+
+                const transcript =
+                    event.results[0][i]
+                    .transcript
+                    .trim();
+
+
+                if(transcript){
+
+                    candidates.push(
+                        transcript
+                    );
+
+                }
+
+            }
+
+
+            if(candidates.length){
+
+                lastHeardText =
+                    candidates[0];
+
+            }
+
+
+            result.textContent =
+                "Heard: " +
+                lastHeardText +
+                "\nSearching...";
+
+
+            try{
+
+                recognition.stop();
+
+            }
+            catch(e){}
+
+
+            button.disabled = false;
+
+            isSearching = true;
+
+            stopButton.disabled = false;
+
+            searchCancelled = false;
+
+
+            await findBestCard(
+                candidates
+            );
+
+        };
+
+
+    recognition.onerror =
+        function(event){
+
+            clearTimeout(timeout);
+
+            button.disabled = false;
+
+
+            if(!isSearching){
+
+                stopButton.disabled = true;
+
+            }
+
+
+            if(event.error !== "aborted"){
+
+                result.textContent =
+                    "Speech error: " +
+                    event.error;
+
+            }
+
+        };
+
+
+    recognition.onend =
+        function(){
+
+            clearTimeout(timeout);
+
+            button.disabled = false;
+
+
+            if(!isSearching){
+
+                stopButton.disabled = true;
+
+            }
+
+        };
+
+}
+
+
+/* =========================================================
+   START LISTENING
+========================================================= */
+
+function startListening(){
+
+    if(!recognition){
+
+        return;
+
+    }
+
+
+    closeCardView();
+
+
+    clearTimeout(timeout);
+
+
+    /*
+       Improvement 5:
+       Clear card search field.
+    */
+
+    manualInput.value = "";
+
+
+    /*
+       Improvement 5:
+       Clear keyword search field.
+    */
+
+    keywordInput.value = "";
+
+
+    searchCancelled = true;
+
+    isSearching = false;
+
+    lastHeardText = "";
+
+
+    result.textContent =
+        "🎤 Listening...";
+
+
+    button.disabled = true;
+
+    stopButton.disabled = true;
+
+
+    searchCancelled = false;
+
+
+    try{
+
+        recognition.start();
+
+    }
+    catch(error){
+
+        console.log(error);
+
+        button.disabled = false;
+
+        stopButton.disabled = true;
+
+    }
+
+
+    timeout =
+        setTimeout(
+            function(){
+
+                try{
+
+                    recognition.stop();
+
+                }
+                catch(e){}
+
+            },
+            3000
+        );
+
+}
+
+
+/* =========================================================
+   STOP SEARCH
+========================================================= */
+
+function stopSearch(){
+
+    clearTimeout(timeout);
+
+
+    searchCancelled = true;
+
+    isSearching = false;
+
+
+    stopButton.disabled = true;
+
+    button.disabled = false;
+
+
+    result.textContent =
+        "⏹ Search stopped.";
+
+}
+
+
+/* =========================================================
+   NORMALIZE
+========================================================= */
+
+function normalizeText(text){
+
+    return text
+        .toLowerCase()
+        .replace(/['’]/g,"")
+        .replace(/[^a-z0-9\s]/g," ")
+        .replace(/\s+/g," ")
+        .trim();
+
+}
+
+
+/* =========================================================
+   LEVENSHTEIN
+========================================================= */
+
+function levenshtein(a,b){
+
+    const matrix=[];
+
+
+    for(let i=0;i<=b.length;i++){
+
+        matrix[i]=[i];
+
+    }
+
+
+    for(let j=0;j<=a.length;j++){
+
+        matrix[0][j]=j;
+
+    }
+
+
+    for(let i=1;i<=b.length;i++){
+
+        for(let j=1;j<=a.length;j++){
+
+            if(
+                b.charAt(i-1) ===
+                a.charAt(j-1)
+            ){
+
+                matrix[i][j] =
+                    matrix[i-1][j-1];
+
+            }
+            else{
+
+                matrix[i][j] =
+                    Math.min(
+                        matrix[i-1][j]+1,
+                        matrix[i][j-1]+1,
+                        matrix[i-1][j-1]+1
+                    );
+
+            }
+
+        }
+
+    }
+
+
+    return matrix[b.length][a.length];
+
+}
+
+
+/* =========================================================
+   SIMILARITY
+========================================================= */
+
+function similarity(a,b){
+
+    a = normalizeText(a);
+
+    b = normalizeText(b);
+
+
+    if(!a || !b){
+
+        return 0;
+
+    }
+
+
+    if(a === b){
+
+        return 1;
+
+    }
+
+
+    const distance =
+        levenshtein(a,b);
+
+
+    const longest =
+        Math.max(
+            a.length,
+            b.length
+        );
+
+
+    return 1 -
+        distance / longest;
+
+}
+
+
+/* =========================================================
+   CARD NAMES
+========================================================= */
+
+async function getCardNames(){
+
+    if(cardNamesCache){
+
+        return cardNamesCache;
+
+    }
+
+
+    try{
+
+        const response =
+            await fetch(
+                "https://api.scryfall.com/catalog/card-names"
+            );
+
+
+        if(!response.ok){
+
+            return null;
+
+        }
+
+
+        const data =
+            await response.json();
+
+
+        cardNamesCache =
+            data.data;
+
+
+        return cardNamesCache;
+
+    }
+    catch(error){
+
+        console.error(error);
+
+        return null;
+
+    }
+
+}
+
+
+/* =========================================================
+   GET ENGLISH CARD
+========================================================= */
+
+async function getEnglishCard(
+    cardName
+){
+
+    if(searchCancelled){
+
+        return null;
+
+    }
+
+
+    try{
+
+        const query =
+            '!"' +
+            cardName +
+            '" lang:en';
+
+
+        const response =
+            await fetch(
+                "https://api.scryfall.com/cards/search?q=" +
+                encodeURIComponent(query)
+            );
+
+
+        if(searchCancelled){
+
+            return null;
+
+        }
+
+
+        if(!response.ok){
+
+            return null;
+
+        }
+
+
+        const data =
+            await response.json();
+
+
+        if(
+            data.data &&
+            data.data.length
+        ){
+
+            for(
+                const card of data.data
+            ){
+
+                if(
+                    card.lang === "en" &&
+                    card.name.toLowerCase() ===
+                    cardName.toLowerCase()
+                ){
+
+                    return card;
+
+                }
+
+            }
+
+        }
+
+    }
+    catch(error){
+
+        console.error(error);
+
+    }
+
+
+    return null;
+
+}
+
+
+/* =========================================================
+   LOCAL FUZZY
+========================================================= */
+
+async function findClosestCard(
+    spoken
+){
+
+    const cardNames =
+        await getCardNames();
+
+
+    if(!cardNames){
+
+        return null;
+
+    }
+
+
+    let bestName = null;
+
+    let bestScore = 0;
+
+
+    for(
+        const cardName of cardNames
+    ){
+
+        if(searchCancelled){
+
+            return null;
+
+        }
+
+
+        const score =
+            similarity(
+                spoken,
+                cardName
+            );
+
+
+        if(score > bestScore){
+
+            bestScore = score;
+
+            bestName = cardName;
+
+        }
+
+    }
+
+
+    if(bestScore >= 0.82){
+
+        return {
+
+            name:bestName,
+
+            score:bestScore
+
+        };
+
+    }
+
+
+    return null;
+
+}
+
+
+/* =========================================================
+   PHONETIC NORMALIZATION
+========================================================= */
+
+function phoneticNormalize(text){
+
+    let s =
+        normalizeText(text);
+
+
+    s =
+        s
+        .replace(/ph/g,"f")
+        .replace(/th/g,"t")
+        .replace(/wh/g,"w")
+        .replace(/ck/g,"k")
+        .replace(/qu/g,"kw")
+        .replace(/c(?=[eiy])/g,"s")
+        .replace(/c/g,"k")
+        .replace(/q/g,"k")
+        .replace(/x/g,"ks")
+        .replace(/z/g,"s")
+        .replace(/j/g,"y")
+        .replace(/ae/g,"a")
+        .replace(/oe/g,"o")
+        .replace(/ee/g,"i")
+        .replace(/oo/g,"u")
+        .replace(/ou/g,"u");
+
+
+    s =
+        s.replace(
+            /(.)\1+/g,
+            "$1"
+        );
+
+
+    return s;
+
+}
+
+
+/* =========================================================
+   PHONETIC SCORE
+========================================================= */
+
+function phoneticSimilarity(a,b){
+
+    return similarity(
+        phoneticNormalize(a),
+        phoneticNormalize(b)
+    );
+
+}
+
+
+/* =========================================================
+   PHONETIC SEARCH
+========================================================= */
+
+async function findPhoneticCard(
+    candidates
+){
+
+    const cardNames =
+        await getCardNames();
+
+
+    if(!cardNames){
+
+        return null;
+
+    }
+
+
+    let bestName = null;
+
+    let bestScore = 0;
+
+
+    for(
+        const candidate of candidates
+    ){
+
+        for(
+            const cardName of cardNames
+        ){
+
+            if(searchCancelled){
+
+                return null;
+
+            }
+
+
+            const score =
+                phoneticSimilarity(
+                    candidate,
+                    cardName
+                );
+
+
+            if(score > bestScore){
+
+                bestScore = score;
+
+                bestName = cardName;
+
+            }
+
+        }
+
+    }
+
+
+    console.log(
+        "Phonetic:",
+        bestName,
+        bestScore
+    );
+
+
+    if(bestScore >= 0.78){
+
+        return {
+
+            name:bestName,
+
+            score:bestScore
+
+        };
+
+    }
+
+
+    return null;
+
+}
+
+
+/* =========================================================
+   MAIN CARD SEARCH
+========================================================= */
+
+async function findBestCard(
+    candidates
+){
+
+    searchCancelled = false;
+
+    isSearching = true;
+
+    stopButton.disabled = false;
+
+
+    /* -----------------------------------------------------
+       1. EXACT
+    ----------------------------------------------------- */
+
+    for(
+        const candidate of candidates
+    ){
+
+        if(searchCancelled){
+
+            return;
+
+        }
+
+
+        try{
+
+            const response =
+                await fetch(
+                    "https://api.scryfall.com/cards/named?exact=" +
+                    encodeURIComponent(candidate)
+                );
+
+
+            if(searchCancelled){
+
+                return;
+
+            }
+
+
+            if(response.ok){
+
+                const data =
+                    await response.json();
+
+
+                const englishCard =
+                    await getEnglishCard(
+                        data.name
+                    );
+
+
+                if(searchCancelled){
+
+                    return;
+
+                }
+
+
+                if(englishCard){
+
+                    showCard(
+                        englishCard,
+                        englishCard.name,
+                        "Exact Match"
+                    );
+
+
+                    isSearching = false;
+
+                    stopButton.disabled = true;
+
+                    return;
+
+                }
+
+            }
+
+        }
+        catch(error){
+
+            console.error(error);
+
+        }
+
+    }
+
+
+    /* -----------------------------------------------------
+       2. SCRYFALL FUZZY
+    ----------------------------------------------------- */
+
+    for(
+        const candidate of candidates
+    ){
+
+        if(searchCancelled){
+
+            return;
+
+        }
+
+
+        try{
+
+            const response =
+                await fetch(
+                    "https://api.scryfall.com/cards/named?fuzzy=" +
+                    encodeURIComponent(candidate)
+                );
+
+
+            if(searchCancelled){
+
+                return;
+
+            }
+
+
+            if(response.ok){
+
+                const data =
+                    await response.json();
+
+
+                const englishCard =
+                    await getEnglishCard(
+                        data.name
+                    );
+
+
+                if(searchCancelled){
+
+                    return;
+
+                }
+
+
+                if(englishCard){
+
+                    showCard(
+                        englishCard,
+                        englishCard.name,
+                        "Scryfall Fuzzy"
+                    );
+
+
+                    isSearching = false;
+
+                    stopButton.disabled = true;
+
+                    return;
+
+                }
+
+            }
+
+        }
+        catch(error){
+
+            console.error(error);
+
+        }
+
+    }
+
+
+    /* -----------------------------------------------------
+       3. LOCAL FUZZY
+    ----------------------------------------------------- */
+
+    result.textContent =
+        "Heard: " +
+        lastHeardText +
+        "\nTrying Local Fuzzy...";
+
+
+    let bestMatch = null;
+
+    let bestScore = 0;
+
+
+    for(
+        const candidate of candidates
+    ){
+
+        const match =
+            await findClosestCard(
+                candidate
+            );
+
+
+        if(searchCancelled){
+
+            return;
+
+        }
+
+
+        if(
+            match &&
+            match.score > bestScore
+        ){
+
+            bestMatch = match;
+
+            bestScore = match.score;
+
+        }
+
+    }
+
+
+    if(bestMatch){
+
+        const englishCard =
+            await getEnglishCard(
+                bestMatch.name
+            );
+
+
+        if(searchCancelled){
+
+            return;
+
+        }
+
+
+        if(englishCard){
+
+            showCard(
+                englishCard,
+                englishCard.name,
+                "Local Fuzzy"
+            );
+
+
+            isSearching = false;
+
+            stopButton.disabled = true;
+
+            return;
+
+        }
+
+    }
+
+
+    /* -----------------------------------------------------
+       4. PHONETIC
+    ----------------------------------------------------- */
+
+    result.textContent =
+        "Heard: " +
+        lastHeardText +
+        "\nTrying Phonetic Match...";
+
+
+    const phonetic =
+        await findPhoneticCard(
+            candidates
+        );
+
+
+    if(searchCancelled){
+
+        return;
+
+    }
+
+
+    if(phonetic){
+
+        const englishCard =
+            await getEnglishCard(
+                phonetic.name
+            );
+
+
+        if(searchCancelled){
+
+            return;
+
+        }
+
+
+        if(englishCard){
+
+            showCard(
+                englishCard,
+                englishCard.name,
+                "Phonetic Match"
+            );
+
+
+            isSearching = false;
+
+            stopButton.disabled = true;
+
+            return;
+
+        }
+
+    }
+
+
+    if(!searchCancelled){
+
+        result.textContent =
+            "Heard: " +
+            lastHeardText +
+            "\nCard not found.";
+
+
+        isSearching = false;
+
+        stopButton.disabled = true;
+
+    }
+
+}
+
+
+/* =========================================================
+   SHOW CARD
+========================================================= */
+
+function showCard(
+    data,
+    matchedName,
+    method
+){
+
+    if(searchCancelled){
+
+        return;
+
+    }
+
+
+    if(data.lang !== "en"){
+
+        console.error(
+            "Non-English card rejected:",
+            data.lang,
+            data.name
+        );
+
+        return;
+
+    }
+
+
+    let imageURL = null;
+
+
+    if(
+        data.image_uris &&
+        data.image_uris.normal
+    ){
+
+        imageURL =
+            data.image_uris.normal;
+
+    }
+    else if(
+        data.card_faces &&
+        data.card_faces[0] &&
+        data.card_faces[0].image_uris
+    ){
+
+        imageURL =
+            data.card_faces[0]
+            .image_uris
+            .normal;
+
+    }
+
+
+    if(!imageURL){
+
+        result.textContent =
+            "Card found, but no image is available.";
+
+        return;
+
+    }
+
+
+    fullscreenCard.src =
+        imageURL;
+
+
+    cardView.style.display =
+        "flex";
+
+
+    document.body.classList.add(
+        "cardMode"
+    );
+
+}
+
+
+/* =========================================================
+   CLOSE CARD VIEW
+========================================================= */
+
+function closeCardView(){
+
+    cardView.style.display =
+        "none";
+
+
+    document.body.classList.remove(
+        "cardMode"
+    );
+
+
+    fullscreenCard.removeAttribute(
+        "src"
+    );
+
+}
+
+
+/* =========================================================
+   TAP CARD TO RETURN
+========================================================= */
+
+cardView.addEventListener(
+    "click",
+    function(){
+
+        closeCardView();
+
+    }
+);
+
+
+/* =========================================================
+   MANUAL CARD SEARCH
+========================================================= */
+
+manualButton.addEventListener(
+    "click",
+    manualSearch
+);
+
+
+manualInput.addEventListener(
+    "keydown",
+    function(event){
+
+        if(event.key === "Enter"){
+
+            manualSearch();
+
+        }
+
+    }
+);
+
+
+function manualSearch(){
+
+    const text =
+        manualInput.value.trim();
+
+
+    if(!text){
+
+        return;
+
+    }
+
+
+    /*
+       Improvement 5:
+       Clear both search fields.
+    */
+
+    manualInput.value = "";
+
+    keywordInput.value = "";
+
+
+    closeCardView();
+
+
+    searchCancelled = true;
+
+    isSearching = false;
+
+
+    try{
+
+        if(recognition){
+
+            recognition.abort();
+
+        }
+
+    }
+    catch(e){}
+
+
+    lastHeardText = "";
+
+
+    result.textContent =
+        "Typed: " +
+        text +
+        "\nSearching...";
+
+
+    searchCancelled = false;
+
+    isSearching = true;
+
+    stopButton.disabled = false;
+
+
+    findBestCard(
+        [text]
+    );
+
+}
+
+
+/* =========================================================
+   KEYWORD CATALOG
+========================================================= */
+
+async function getKeywordCatalog(
+    catalogName
+){
+
+    try{
+
+        const response =
+            await fetch(
+                "https://api.scryfall.com/catalog/" +
+                catalogName
+            );
+
+
+        if(!response.ok){
+
+            return null;
+
+        }
+
+
+        const data =
+            await response.json();
+
+
+        return data.data || null;
+
+    }
+    catch(error){
+
+        console.error(error);
+
+        return null;
+
+    }
+
+}
+
+
+/* =========================================================
+   FIND KEYWORD TYPE
+========================================================= */
+
+async function findKeywordType(
+    keyword
+){
+
+    const normalized =
+        normalizeText(keyword);
+
+
+    if(!normalized){
+
+        return null;
+
+    }
+
+
+    if(!keywordAbilitiesCache){
+
+        keywordAbilitiesCache =
+            await getKeywordCatalog(
+                "keyword-abilities"
+            );
+
+    }
+
+
+    if(!keywordActionsCache){
+
+        keywordActionsCache =
+            await getKeywordCatalog(
+                "keyword-actions"
+            );
+
+    }
+
+
+    if(!abilityWordsCache){
+
+        abilityWordsCache =
+            await getKeywordCatalog(
+                "ability-words"
+            );
+
+    }
+
+
+    function matches(list){
+
+        if(!list){
+
+            return false;
+
+        }
+
+
+        return list.some(
+            function(item){
+
+                return normalizeText(item) ===
+                    normalized;
+
+            }
+        );
+
+    }
+
+
+    if(matches(keywordAbilitiesCache)){
+
+        return "Keyword Ability";
+
+    }
+
+
+    if(matches(keywordActionsCache)){
+
+        return "Keyword Action";
+
+    }
+
+
+    if(matches(abilityWordsCache)){
+
+        return "Ability Word";
+
+    }
+
+
+    return null;
+
+}
+
+
+/* =========================================================
+   ABILITY WORD DEFINITIONS
+=========================================================
+
+   Ability words do not have one fixed rules meaning.
+   Therefore we do NOT take random reminder text from
+   cards. Instead we provide a general explanation.
+
+========================================================= */
+
+const abilityWordDefinitions = {
+
+    "ferocious":
+        "An ability word for abilities that get a bonus or have an additional effect if you control a creature with power 4 or greater. Each ferocious ability works differently, so read the ability carefully.",
+
+    "landfall":
+        "An ability word for abilities that trigger or get a bonus whenever a land enters the battlefield under your control. Each landfall ability works differently.",
+
+    "morbid":
+        "An ability word for abilities that care about whether a creature has died this turn. Each morbid ability works differently.",
+
+    "metalcraft":
+        "An ability word for abilities that get a bonus or have an additional effect if you control three or more artifacts. Each metalcraft ability works differently.",
+
+    "spell mastery":
+        "An ability word for abilities that get a bonus if there are two or more instant and/or sorcery cards in your graveyard. Each spell mastery ability works differently.",
+
+    "delirium":
+        "An ability word for abilities that get a bonus if there are four or more card types among cards in your graveyard. Each delirium ability works differently.",
+
+    "revolt":
+        "An ability word for abilities that get a bonus if a permanent you controlled left the battlefield this turn. Each revolt ability works differently.",
+
+    "raid":
+        "An ability word for abilities that get a bonus if you attacked with a creature this turn. Each raid ability works differently.",
+
+    "formidable":
+        "An ability word for abilities that get a bonus if the total power of creatures you control is 8 or greater. Each formidable ability works differently.",
+
+    "battalion":
+        "An ability word for abilities that trigger or get a bonus when you attack with three or more creatures. Each battalion ability works differently.",
+
+    "bloodrush":
+        "An ability word associated with abilities that allow a creature card to be discarded to give an attacking creature a temporary bonus or effect. Each bloodrush ability works differently.",
+
+    "heroic":
+        "An ability word for abilities that trigger whenever you cast a spell that targets the creature with the heroic ability. Each heroic ability has its own effect.",
+
+    "inspired":
+        "An ability word for abilities that trigger when a creature becomes untapped. Each inspired ability works differently.",
+
+    "constellation":
+        "An ability word for abilities that trigger whenever an enchantment enters the battlefield under your control. Each constellation ability works differently.",
+
+    "prowess":
+        "An ability word for abilities that trigger whenever you cast a noncreature spell. Each prowess ability can have its own effect.",
+
+    "ascend":
+        "An ability word associated with the city's blessing. If you have the city's blessing, certain cards get additional effects or abilities.",
+
+    "threshold":
+        "An ability word for abilities that get a bonus when you have seven or more cards in your graveyard. Each threshold ability works differently.",
+
+    "hellbent":
+        "An ability word for abilities that get a bonus if you have no cards in your hand. Each hellbent ability works differently.",
+
+    "ferocious":
+        "An ability word for abilities that get a bonus or additional effect if you control a creature with power 4 or greater. Each ferocious ability works differently.",
+
+    "pack tactics":
+        "An ability word for abilities that trigger when you attack with creatures whose total power is 6 or greater. Each pack tactics ability works differently.",
+
+    "enrage":
+        "An ability word for abilities that trigger when a creature with the ability is dealt damage. Each enrage ability works differently.",
+
+    "exploit":
+        "An ability word for abilities that trigger when a creature enters the battlefield and allow you to sacrifice a creature for an additional effect.",
+
+    "outlast":
+        "An ability word associated with an activated ability that lets a creature tap and receive a +1/+1 counter. The ability can normally be activated only as a sorcery.",
+
+    "unleash":
+        "An ability word associated with a choice made as a creature enters the battlefield: it can enter with a +1/+1 counter, but then it cannot block.",
+
+    "soulbond":
+        "An ability word associated with abilities that pair two creatures. While paired, each creature can grant an ability or bonus to the other.",
+
+    "bloodthirst":
+        "An ability word for creatures and abilities that get a bonus if an opponent was dealt damage this turn. The amount of the bonus depends on the card.",
+
+    "metalcraft":
+        "An ability word for abilities that get a bonus or additional effect if you control three or more artifacts.",
+
+    "domain":
+        "An ability word for abilities whose effect depends on the number of basic land types among lands you control.",
+
+    "sneak":
+        "An ability word used on some abilities that reward attacking with creatures that entered the battlefield this turn. The exact effect is defined by the card.",
+
+    "pack tactics":
+        "An ability word for abilities that trigger when you attack with creatures with total power 6 or greater. Each ability defines its own effect."
+
+};
+
+
+/* =========================================================
+   ABILITY WORD EXPLANATION
+========================================================= */
+
+function getAbilityWordDefinition(
+    keyword
+){
+
+    const normalized =
+        normalizeText(keyword);
+
+
+    if(
+        abilityWordDefinitions[
+            normalized
+        ]
+    ){
+
+        return abilityWordDefinitions[
+            normalized
+        ];
+
+    }
+
+
+    /*
+       Important fallback.
+
+       If Scryfall tells us that the word is an
+       ability word but we do not yet have a
+       specific definition above, NEVER use
+       random reminder text from a card.
+
+       Instead give a safe generic explanation.
+    */
+
+    return (
+        "An ability word used to group abilities " +
+        "that share a particular theme or condition. " +
+        "Ability words have no rules meaning by themselves; " +
+        "the actual effect is defined by the ability that follows the word."
+    );
+
+}
+
+
+/* =========================================================
+   EXTRACT REMINDER TEXT
+========================================================= */
+
+function extractReminderText(
+    oracleText,
+    keyword
+){
+
+    if(!oracleText){
+
+        return null;
+
+    }
+
+
+    const lines =
+        oracleText.split("\n");
+
+
+    const normalizedKeyword =
+        normalizeText(keyword);
+
+
+    for(
+        let i=0;
+        i<lines.length;
+        i++
+    ){
+
+        const line =
+            lines[i];
+
+
+        const normalizedLine =
+            normalizeText(line);
+
+
+        /*
+           Do NOT use this for ability words.
+           It is only useful for keyword abilities
+           and keyword actions.
+        */
+
+        if(
+            normalizedLine.includes(
+                normalizedKeyword
+            )
+        ){
+
+            const match =
+                line.match(
+                    /\(([^()]*)\)/
+                );
+
+
+            if(match){
+
+                return match[1].trim();
+
+            }
+
+        }
+
+    }
+
+
+    return null;
+
+}
+
+
+/* =========================================================
+   GET KEYWORD DESCRIPTION
+========================================================= */
+
+async function getKeywordDescription(
+    keyword,
+    keywordType
+){
+
+    if(searchCancelled){
+
+        return null;
+
+    }
+
+
+    /*
+       =====================================================
+       ABILITY WORD
+       =====================================================
+
+       NEVER search random card reminder text for these.
+    */
+
+    if(
+        keywordType ===
+        "Ability Word"
+    ){
+
+        return {
+
+            description:
+                getAbilityWordDefinition(
+                    keyword
+                ),
+
+            sourceCard:null
+
+        };
+
+    }
+
+
+    /*
+       =====================================================
+       KEYWORD ABILITY / KEYWORD ACTION
+       =====================================================
+    */
+
+    const query =
+        "keyword:" +
+        keyword +
+        " lang:en";
+
+
+    try{
+
+        const response =
+            await fetch(
+                "https://api.scryfall.com/cards/search?q=" +
+                encodeURIComponent(query) +
+                "&unique=cards"
+            );
+
+
+        if(searchCancelled){
+
+            return null;
+
+        }
+
+
+        if(!response.ok){
+
+            return null;
+
+        }
+
+
+        const data =
+            await response.json();
+
+
+        if(
+            !data.data ||
+            !data.data.length
+        ){
+
+            return null;
+
+        }
+
+
+        /*
+           Look through English cards and find
+           actual reminder text.
+        */
+
+        for(
+            const card of data.data
+        ){
+
+            if(searchCancelled){
+
+                return null;
+
+            }
+
+
+            if(card.lang !== "en"){
+
+                continue;
+
+            }
+
+
+            const description =
+                extractReminderText(
+                    card.oracle_text,
+                    keyword
+                );
+
+
+            if(description){
+
+                return {
+
+                    description:description,
+
+                    sourceCard:card.name
+
+                };
+
+            }
+
+        }
+
+    }
+    catch(error){
+
+        console.error(error);
+
+    }
+
+
+    return null;
+
+}
+
+
+/* =========================================================
+   KEYWORD SEARCH
+========================================================= */
+
+keywordButton.addEventListener(
+    "click",
+    searchKeyword
+);
+
+
+keywordInput.addEventListener(
+    "keydown",
+    function(event){
+
+        if(event.key === "Enter"){
+
+            searchKeyword();
+
+        }
+
+    }
+);
+
+
+async function searchKeyword(){
+
+    const keyword =
+        keywordInput.value.trim();
+
+
+    if(!keyword){
+
+        return;
+
+    }
+
+
+    /*
+       Improvement 5:
+       Clear keyword field immediately.
+    */
+
+    keywordInput.value = "";
+
+
+    closeCardView();
+
+
+    searchCancelled = true;
+
+    isSearching = false;
+
+
+    try{
+
+        if(recognition){
+
+            recognition.abort();
+
+        }
+
+    }
+    catch(e){}
+
+
+    stopButton.disabled = true;
+
+
+    keywordTitle.textContent =
+        "";
+
+
+    keywordDescription.textContent =
+        "Searching...";
+
+
+    searchCancelled = false;
+
+
+    /*
+       First determine exactly what kind of
+       Scryfall keyword we are dealing with.
+    */
+
+    const keywordType =
+        await findKeywordType(
+            keyword
+        );
+
+
+    if(searchCancelled){
+
+        return;
+
+    }
+
+
+    if(!keywordType){
+
+        keywordTitle.textContent =
+            keyword;
+
+
+        keywordDescription.textContent =
+            "Keyword not found.";
+
+
+        keywordResult.scrollIntoView({
+
+            behavior:"smooth",
+
+            block:"start"
+
+        });
+
+
+        return;
+
+    }
+
+
+    /*
+       Show the type as part of the result.
+    */
+
+    keywordTitle.textContent =
+        keyword +
+        " — " +
+        keywordType;
+
+
+    /*
+       Get the correct explanation.
+    */
+
+    const information =
+        await getKeywordDescription(
+            keyword,
+            keywordType
+        );
+
+
+    if(searchCancelled){
+
+        return;
+
+    }
+
+
+    if(information){
+
+        keywordDescription.textContent =
+            information.description;
+
+    }
+    else{
+
+        keywordDescription.textContent =
+            "No English explanation was found.";
+
+    }
+
+
+    /*
+       Scroll directly to the explanation.
+    */
+
+    keywordResult.scrollIntoView({
+
+        behavior:"smooth",
+
+        block:"start"
+
+    });
+
+}
+
+</script>
+
+</body>
+</html>
